@@ -1,0 +1,234 @@
+/* ScenicSpot 页面样式 */
+.scenic-spot-container {
+  width: 100%;
+  padding: 40px 20px 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.scenic-spot-container h2 {
+  font-size: 28px;
+  color: #667eea;
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+.search-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 30px;
+  max-width: 600px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.search-input {
+  flex: 1;
+  padding: 12px 20px;
+  border: 1px solid #ddd;
+  border-radius: 25px;
+  font-size: 14px;
+  outline: none;
+}
+
+.search-input:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.1);
+}
+
+.search-btn {
+  padding: 12px 30px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 25px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: transform 0.3s ease;
+}
+
+.search-btn:hover {
+  transform: translateY(-2px);
+}
+
+.spots-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 25px;
+}
+
+.spot-card {
+  background: white;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  transition: transform 0.3s ease;
+}
+
+.spot-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.spot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.spot-emoji {
+  font-size: 50px;
+}
+
+.level-tag {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+}
+
+.level-tag.5A {
+  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+}
+
+.spot-card h3 {
+  color: #333;
+  font-size: 20px;
+  margin-bottom: 10px;
+}
+
+.spot-location {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.spot-desc {
+  color: #666;
+  font-size: 14px;
+  line-height: 1.6;
+  margin-bottom: 15px;
+}
+
+.spot-info {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.info-row {
+  display: flex;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.info-row:last-child {
+  margin-bottom: 0;
+}
+
+.label {
+  color: #999;
+  width: 80px;
+}
+
+.value {
+  color: #333;
+  font-weight: 500;
+}
+
+.price {
+  color: #f44336;
+  font-weight: bold;
+  font-size: 16px;
+}
+
+.rating {
+  color: #ff9800;
+}
+
+.spot-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.action-btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.3s ease;
+}
+
+.action-btn.primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.action-btn.secondary {
+  background: #f0f0f0;
+  color: #333;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+
+/* 景点特色部分样式 */
+.intro-section {
+  margin-top: 40px;
+  background: white;
+  border-radius: 10px;
+  padding: 25px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.intro-section h3 {
+  color: #333;
+  font-size: 20px;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.intro-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.intro-item {
+  display: flex;
+  gap: 15px;
+  padding: 15px;
+  background: #f8f9fa;
+  border-radius: 8px;
+  transition: transform 0.3s ease;
+}
+
+.intro-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.intro-icon {
+  font-size: 30px;
+  flex-shrink: 0;
+  margin-top: 5px;
+}
+
+.intro-content h4 {
+  color: #333;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.intro-content p {
+  color: #666;
+  font-size: 14px;
+  line-height: 1.5;
+}

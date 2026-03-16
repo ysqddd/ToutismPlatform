@@ -1,0 +1,70 @@
+/* UserCenter 页面样式 */
+.user-center-container {
+  width: 100%;
+  padding: 40px 20px 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.user-center-container h2 {
+  font-size: 28px;
+  color: #667eea;
+  margin-bottom: 30px;
+  text-align: center;
+}
+
+.user-info-card {
+  background: white;
+  border-radius: 10px;
+  padding: 30px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  display: grid;
+  gap: 30px;
+}
+
+.info-section h3 {
+  color: #333;
+  font-size: 20px;
+  margin-bottom: 20px;
+  border-left: 4px solid #667eea;
+  padding-left: 15px;
+}
+
+.info-item {
+  display: flex;
+  margin-bottom: 15px;
+  font-size: 16px;
+}
+
+.label {
+  font-weight: bold;
+  color: #666;
+  width: 100px;
+}
+
+.value {
+  color: #333;
+}
+
+.tip {
+  color: #999;
+  font-style: italic;
+}
+
+.action-btn {
+  display: block;
+  width: 150px;
+  padding: 10px;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: transform 0.3s ease;
+}
+
+.action-btn:hover {
+  transform: translateY(-2px);
+}
