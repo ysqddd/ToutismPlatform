@@ -1,5 +1,6 @@
 package org.example.toutismplatform.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.Data;
@@ -15,6 +16,7 @@ public class LargeScenicArea {
     private Long id;
     
     @ManyToMany(mappedBy = "largeScenicAreas", fetch = FetchType.LAZY)
+    @JsonIgnoreProperties({"largeScenicAreas"}) // 关键修复：忽略反向引用，防止无限循环
     private List<Product> products;
     
     @Column(nullable = false)

@@ -160,35 +160,70 @@ export default {
       }
     },
     calculatePrice() {
+      console.log('=== 开始计算价格 ===')
+      console.log('可选景区列表:', this.availableAreas)
+      console.log('已选景区 ID (原始):', this.selectedAreaIds)
+      console.log('已选景区 ID 类型:', this.selectedAreaIds.map(id => typeof id))
+      
       // 前端临时计算价格（后端会重新计算）
       let totalPrice = 0
-      const selectedAreas = this.availableAreas.filter(area => 
-        this.selectedAreaIds.includes(area.id.toString())
-      )
       
+      // 关键修复：统一使用字符串比较
+      const selectedAreas = this.availableAreas.filter(area => {
+        const areaIdStr = String(area.id)
+        const isSelected = this.selectedAreaIds.some(selectedId => String(selectedId) === areaIdStr)
+        console.log(`景区 ${area.name} (ID:${area.id}), 是否选中：${isSelected}`)
+        return isSelected
+      })
+          
+      console.log('过滤后的景区:', selectedAreas)
+      console.log('过滤后的景区数量:', selectedAreas.length)
+          
+      if (selectedAreas.length === 0) {
+        console.log('未选择任何景区，价格为 0')
+        this.formData.price = 0
+        this.formData.largeScenicAreas = []
+        return
+      }
+          
       selectedAreas.forEach((area, index) => {
+        console.log(`景区 ${index + 1}: ${area.name}, 价格：${area.price}, 价格类型：${typeof area.price}`)
         if (index < 3) {
-          totalPrice += parseFloat(area.price)
+          // 前 3 个景区按原价
+          const priceToAdd = parseFloat(area.price || 0)
+          totalPrice += priceToAdd
+          console.log(`  -> 前 3 个，添加：${priceToAdd}`)
         } else {
-          totalPrice += parseFloat(area.price) * 0.95
+          // 之后的景区优惠 5%
+          const discountedPrice = parseFloat(area.price || 0) * 0.95
+          totalPrice += discountedPrice
+          console.log(`  -> 第 ${index + 1} 个，95 折后：${discountedPrice}`)
         }
       })
-      
+          
       if (selectedAreas.length > 3) {
-        totalPrice *= 0.99
+        // 总价格优惠 1%
+        const discount = totalPrice * 0.01
+        totalPrice -= discount
+        console.log(`超过 3 个景区，总价优惠 1%: -${discount}`)
       }
-      
+          
       this.formData.price = Math.round(totalPrice)
-      
-      // 更新largeScenicAreas
+      console.log(`最终价格：${this.formData.price}`)
+          
+      // 关键修复：只传递 ID，让后端从数据库加载完整信息
       this.formData.largeScenicAreas = selectedAreas.map(area => ({
-        id: area.id,
-        name: area.name,
-        price: area.price,
-        productId: this.formData.id
+        id: area.id
       }))
+          
+      console.log('发送给后端的景区数据:', this.formData.largeScenicAreas)
+      console.log('=== 价格计算完成 ===')
     },
     editProduct(product) {
+      console.log('=== 编辑套餐 ===')
+      console.log('原始产品数据:', product)
+      console.log('原始产品的景区:', product.largeScenicAreas)
+      
       this.formData = { 
         id: product.id,
         name: product.name || '',
@@ -198,10 +233,22 @@ export default {
         status: product.status || 'ON_SALE',
         largeScenicAreas: product.largeScenicAreas || []
       }
-      
-      // 设置已选择的景区ID
-      this.selectedAreaIds = (product.largeScenicAreas || []).map(area => area.id.toString())
-      
+          
+      // 设置已选择的景区 ID
+      if (product.largeScenicAreas && product.largeScenicAreas.length > 0) {
+        this.selectedAreaIds = product.largeScenicAreas.map(area => area.id.toString())
+        console.log('已选景区 ID:', this.selectedAreaIds)
+      } else {
+        this.selectedAreaIds = []
+        console.log('没有已选景区')
+      }
+          
+      // 关键修复：重新计算价格，确保使用最新的景区价格
+      this.$nextTick(() => {
+        console.log('$nextTick 中调用 calculatePrice')
+        this.calculatePrice()
+      })
+          
       this.showEditModal = true
     },
     async deleteProduct(id) {
@@ -218,18 +265,34 @@ export default {
     },
     async saveProduct() {
       try {
+        console.log('=== 准备保存套餐 ===')
+        console.log('当前表单数据:', JSON.stringify(this.formData, null, 2))
+        
+        // 关键修复：保存前再次重新计算价格，确保使用最新的景区价格
+        this.calculatePrice()
+        
+        console.log('保存前的最终数据:')
+        console.log('  - 价格:', this.formData.price)
+        console.log('  - 景区数量:', this.formData.largeScenicAreas ? this.formData.largeScenicAreas.length : 0)
+        console.log('  - 景区 ID:', this.formData.largeScenicAreas?.map(a => a.id))
+        
         if (this.showAddModal) {
-          await apiClient.post('/api/products', this.formData)
+          console.log('执行 POST 请求...')
+          const response = await apiClient.post('/api/products', this.formData)
+          console.log('POST 响应:', response.data)
           alert('添加成功')
         } else {
-          await apiClient.put(`/api/products/${this.formData.id}`, this.formData)
+          console.log('执行 PUT 请求...')
+          const response = await apiClient.put(`/api/products/${this.formData.id}`, this.formData)
+          console.log('PUT 响应:', response.data)
           alert('更新成功')
         }
         this.closeModal()
         this.loadProducts()
       } catch (error) {
-        console.error('保存失败:', error)
-        alert('保存失败，请稍后重试')
+        console.error('保存失败，完整错误:', error)
+        console.error('错误响应:', error.response?.data)
+        alert('保存失败：' + (error.response?.data?.message || error.message))
       }
     },
     closeModal() {

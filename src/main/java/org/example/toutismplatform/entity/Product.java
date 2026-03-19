@@ -1,5 +1,6 @@
 package org.example.toutismplatform.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.math.BigDecimal;
@@ -41,6 +42,7 @@ public class Product {
         joinColumns = @JoinColumn(name = "product_id"),
         inverseJoinColumns = @JoinColumn(name = "large_scenic_area_id")
     )
+    @JsonIgnoreProperties({"products"}) // 关键修复：忽略反向引用，防止无限循环
     private List<LargeScenicArea> largeScenicAreas;
     
     @PrePersist

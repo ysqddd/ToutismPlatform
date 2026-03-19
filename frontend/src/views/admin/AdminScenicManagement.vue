@@ -271,15 +271,29 @@ export default {
   methods: {
     async loadScenicAreas() {
       try {
+        console.log('=== 开始加载大景区列表 ===')
         const response = await apiClient.get('/api/large-areas/all')
+        console.log('API 响应状态:', response.status)
+        console.log('API 响应数据:', response.data)
+        console.log('响应数据类型:', typeof response.data)
+        console.log('是否为数组:', Array.isArray(response.data))
+        
+        // 关键修复：检查返回的数据是否为数组
+        if (!Array.isArray(response.data)) {
+          console.error('后端返回的数据不是数组:', response.data)
+          throw new Error('后端返回的数据格式错误，期望数组但得到：' + typeof response.data)
+        }
+        
         // 处理图片路径，将相对路径转换为完整 URL
         this.scenicAreas = response.data.map(area => ({
           ...area,
           fullImageUrl: area.imageUrl ? this.API_BASE_URL + area.imageUrl : null
         }))
+        console.log('加载成功，景区数量:', this.scenicAreas.length)
       } catch (error) {
         console.error('加载大景区列表失败:', error)
-        alert('加载大景区列表失败，请稍后重试')
+        console.error('错误详情:', error.message)
+        alert('加载大景区列表失败：' + error.message)
       }
     },
     async loadScenicSpots() {

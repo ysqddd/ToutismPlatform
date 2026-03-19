@@ -11,7 +11,7 @@
  Target Server Version : 80034
  File Encoding         : 65001
 
- Date: 16/03/2026 13:46:02
+ Date: 19/03/2026 16:41:27
 */
 
 SET NAMES utf8mb4;
@@ -66,12 +66,12 @@ CREATE TABLE `large_scenic_area`  (
   `updated_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_is_public_facility`(`is_public_facility`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 5 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of large_scenic_area
 -- ----------------------------
-INSERT INTO `large_scenic_area` VALUES (1, '嵩阳景区', '嵩阳书院始建于北魏太和八年（公元484年），当时是佛教活动场所，名为嵩阳寺。隋唐年间成为道教活动场所，唐高宗和武则天曾两次以这里为行宫。北宋时期成为著名的教育场所，名儒范仲淹、程颐、程颢、司马光等人都曾在此讲学，司马光的历史巨著《资治通鉴》有一部分就是在书院完成的。这些名儒的讲学活动，不仅使嵩阳书院成为北宋四大书院之首，而且也使嵩阳书院成为宋代理学的发源地之一。', '景区东北方', '/images/4f377437-6347-4790-a609-069a64170bca_2-1499592162278.jpg', '8:00-20:00', 32.00, '北宋四大书院之首,宋代理学的发源地', 0, '2026-03-16 04:50:54', '2026-03-16 05:02:01');
+INSERT INTO `large_scenic_area` VALUES (1, '嵩阳景区', '嵩阳书院始建于北魏太和八年（公元484年），当时是佛教活动场所，名为嵩阳寺。隋唐年间成为道教活动场所，唐高宗和武则天曾两次以这里为行宫。北宋时期成为著名的教育场所，名儒范仲淹、程颐、程颢、司马光等人都曾在此讲学，司马光的历史巨著《资治通鉴》有一部分就是在书院完成的。这些名儒的讲学活动，不仅使嵩阳书院成为北宋四大书院之首，而且也使嵩阳书院成为宋代理学的发源地之一。', '景区东北方', '/images/4f377437-6347-4790-a609-069a64170bca_2-1499592162278.jpg', '8:00-20:00', 32.00, '人文风光', 0, '2026-03-16 04:50:54', '2026-03-16 05:46:59');
 INSERT INTO `large_scenic_area` VALUES (2, '景区北大门', '无', '正北方', '/images/ec24ff52-0d8c-420e-987e-ef111314c5dc_生成景区北大门图片.png', '8:00-20:00', 0.00, '无', 1, '2026-03-16 05:15:05', '2026-03-16 05:29:27');
 INSERT INTO `large_scenic_area` VALUES (3, '西大门', '无', '正西方向', '/images/44253beb-94ce-453d-a210-864f11576e62_生成景区北大门图片 (1).png', '8:00-20:00', 0.00, '无', 1, '2026-03-16 05:37:11', '2026-03-16 05:37:11');
 INSERT INTO `large_scenic_area` VALUES (4, '书证沟景区', '树正沟为九寨沟主沟，是九寨沟秀丽风景的大门，在九寨沟呈“Y”字形分布的三条沟谷中处于下支]。共有各种湖泊（海子）40余个，约占九寨沟景区全部湖泊的40%，40多个湖泊，犹如40多面晶莹的宝镜，顺沟叠延五、六公里。水光潋滟，碧波荡漾，鸟雀鸣唱，芦苇摇曳。沟内主要景点包括盆景滩、芦苇海、火花海、卧龙海、树正群海、树正瀑布、老虎海、犀牛海、双龙海及诺日朗瀑布等 [4] [8] [12]。其中，火花海在2017年地震中堤坝崩塌，后经生态修复恢复了湖泊景观；树正群海由大小19块海子组成，森林、湖泊、小瀑布相错相连', '景区西北方', '/images/2dfd36d9-88cd-44f7-b8e8-e56bdb81c2df_R-C.jpg', '8:00-20:00', 43.00, '自然美景', 0, '2026-03-16 05:45:06', '2026-03-16 05:45:06');
@@ -150,7 +150,7 @@ CREATE TABLE `permissions`  (
   PRIMARY KEY (`id`) USING BTREE,
   UNIQUE INDEX `UKn5aybip77714anlj8quyebgyk`(`level`) USING BTREE,
   UNIQUE INDEX `UKpnvtwliis6p05pn6i3ndjrqt2`(`name`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of permissions
@@ -171,11 +171,12 @@ CREATE TABLE `product`  (
   `updated_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_status`(`status`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of product
 -- ----------------------------
+INSERT INTO `product` VALUES (1, '1111', '11', 0.00, '', 'ON_SALE', '2026-03-19 08:14:30', '2026-03-19 08:36:44');
 
 -- ----------------------------
 -- Table structure for product_large_scenic_area
@@ -291,11 +292,16 @@ CREATE TABLE `scenic_area_edge`  (
   `updated_at` datetime(6) NOT NULL,
   `description` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
   PRIMARY KEY (`id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of scenic_area_edge
 -- ----------------------------
+INSERT INTO `scenic_area_edge` VALUES (1, '2026-03-16 05:53:31.000804', 2000.00, 16, 2, 1, '2026-03-16 05:53:31.000804', '公路');
+INSERT INTO `scenic_area_edge` VALUES (2, '2026-03-16 05:53:55.380334', 4000.00, 30, 2, 3, '2026-03-16 05:53:55.380334', '公路');
+INSERT INTO `scenic_area_edge` VALUES (3, '2026-03-16 05:54:18.309587', 1423.00, 19, 2, 4, '2026-03-16 05:54:18.309587', '盘山公路');
+INSERT INTO `scenic_area_edge` VALUES (4, '2026-03-16 05:55:14.054955', 3231.00, 30, 1, 4, '2026-03-16 05:55:14.054955', '公路');
+INSERT INTO `scenic_area_edge` VALUES (5, '2026-03-16 05:55:36.303502', 531.00, 10, 4, 3, '2026-03-16 05:55:36.303502', '索道');
 
 -- ----------------------------
 -- Table structure for scenic_edge
