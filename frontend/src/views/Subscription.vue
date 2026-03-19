@@ -78,7 +78,7 @@ export default {
         productId: plan.productId,
         productName: plan.name,
         price: plan.price,
-        features: plan.features
+        features: plan.features ? plan.features.join('; ') : ''
       }
       
       apiClient.post('/api/cart', cartItem)

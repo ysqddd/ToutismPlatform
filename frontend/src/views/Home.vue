@@ -88,7 +88,7 @@ export default {
         productId: product.id,
         productName: product.name,
         price: product.price,
-        features: product.description ? [product.description] : []
+        features: product.description ? product.description : ''
       }
       
       apiClient.post('/api/cart', cartItem)
