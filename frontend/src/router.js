@@ -8,6 +8,7 @@ import AdminProducts from './views/admin/AdminProducts.vue'
 import AdminUsers from './views/admin/AdminUsers.vue'
 import AdminPermissions from './views/admin/AdminPermissions.vue'
 import AdminEmployees from './views/admin/AdminEmployees.vue'
+import AdminPathManagement from './views/admin/AdminPathManagement.vue'
 
 const routes = [
   {
@@ -101,6 +102,12 @@ const routes = [
     path: '/admin/employees',
     name: 'AdminEmployees',
     component: AdminEmployees,
+    meta: { requiresAdmin: true }
+  },
+  {
+    path: '/admin/path-management',
+    name: 'AdminPathManagement',
+    component: AdminPathManagement,
     meta: { requiresAdmin: true }
   }
 ]

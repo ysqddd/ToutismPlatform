@@ -21,13 +21,26 @@
         <span class="icon">👨‍💼</span>
         <span class="text">管理员工</span>
       </li>
-      <li class="menu-item" :class="{ active: isActive('/admin/scenic-management') }" @click="navigateTo('/admin/scenic-management')">
-        <span class="icon">�️</span>
-        <span class="text">景区管理</span>
-      </li>
-      <li class="menu-item" :class="{ active: isActive('/admin/products') }" @click="navigateTo('/admin/products')">
-        <span class="icon">📦</span>
-        <span class="text">管理套餐</span>
+      <li class="menu-item dropdown" @mouseenter="openDropdown('comprehensive')" @mouseleave="handleDropdownLeave('comprehensive')">
+        <div class="dropdown-toggle">
+          <span class="icon">📋</span>
+          <span class="text">综合管理</span>
+          <span class="dropdown-arrow">▼</span>
+        </div>
+        <div class="dropdown-menu" v-if="dropdowns.comprehensive" @mouseenter="openDropdown('comprehensive')" @mouseleave="handleDropdownLeave('comprehensive')">
+          <div class="dropdown-item" @click="navigateTo('/admin/scenic-management')">
+            <span class="icon">🏞️</span>
+            <span class="text">景区管理</span>
+          </div>
+          <div class="dropdown-item" @click="navigateTo('/admin/products')">
+            <span class="icon">📦</span>
+            <span class="text">套餐管理</span>
+          </div>
+          <div class="dropdown-item" @click="navigateTo('/admin/path-management')">
+            <span class="icon">🗺️</span>
+            <span class="text">路径管理</span>
+          </div>
+        </div>
       </li>
     </ul>
     
@@ -45,7 +58,11 @@ export default {
   name: 'AdminNavBar',
   data() {
     return {
-      adminUsername: ''
+      adminUsername: '',
+      dropdowns: {
+        comprehensive: false
+      },
+      dropdownTimers: {}
     }
   },
   mounted() {
@@ -57,6 +74,30 @@ export default {
     },
     isActive(path) {
       return this.$route.path === path
+    },
+    openDropdown(dropdownName) {
+      // 清除之前的定时器
+      if (this.dropdownTimers && this.dropdownTimers[dropdownName]) {
+        clearTimeout(this.dropdownTimers[dropdownName])
+      }
+      this.dropdowns[dropdownName] = true
+    },
+    closeDropdown(dropdownName) {
+      this.dropdowns[dropdownName] = false
+    },
+    handleDropdownLeave(dropdownName) {
+      // 设置定时器，延迟关闭下拉菜单
+      if (!this.dropdownTimers) {
+        this.dropdownTimers = {}
+      }
+      // 清除之前的定时器
+      if (this.dropdownTimers[dropdownName]) {
+        clearTimeout(this.dropdownTimers[dropdownName])
+      }
+      // 300毫秒后关闭下拉菜单
+      this.dropdownTimers[dropdownName] = setTimeout(() => {
+        this.dropdowns[dropdownName] = false
+      }, 300)
     },
     handleLogout() {
       localStorage.removeItem('adminToken')
@@ -129,6 +170,52 @@ export default {
 
 .text {
   white-space: nowrap;
+}
+
+.dropdown {
+  position: relative;
+}
+
+.dropdown-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dropdown-arrow {
+  font-size: 12px;
+  transition: transform 0.3s;
+}
+
+.dropdown-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: white;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  min-width: 180px;
+  margin-top: 8px;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  color: #333;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.dropdown-item:hover {
+  background-color: #f5f5f5;
+}
+
+.dropdown-item .icon {
+  color: #667eea;
 }
 
 .navbar-user {

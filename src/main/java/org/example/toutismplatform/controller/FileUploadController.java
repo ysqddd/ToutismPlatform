@@ -19,7 +19,7 @@ import java.util.UUID;
 public class FileUploadController {
     
     // 上传目录
-    private static final String UPLOAD_DIR = "uploads";
+    private static final String UPLOAD_DIR = "C:\\Users\\lenovo\\Desktop\\ToutismPlatform\\src\\main\\resources\\images";
     
     @PostMapping("/image")
     public ResponseEntity<Map<String, String>> uploadImage(@RequestParam("image") MultipartFile file) {
@@ -40,7 +40,7 @@ public class FileUploadController {
             Files.write(filePath, file.getBytes());
             
             // 返回文件URL
-            String fileUrl = "/uploads/" + fileName;
+            String fileUrl = "/images/" + fileName;
             response.put("imageUrl", fileUrl);
             response.put("status", "success");
             

@@ -46,6 +46,7 @@
                 <th>开放时间</th>
                 <th>价格</th>
                 <th>标签</th>
+                <th>是否公共措施</th>
                 <th>图片</th>
                 <th>操作</th>
               </tr>
@@ -58,8 +59,9 @@
                 <td>{{ area.openingHours || '-' }}</td>
                 <td>{{ area.price || '-' }}</td>
                 <td>{{ area.tags || '-' }}</td>
+                <td>{{ area.isPublicFacility ? '是' : '否' }}</td>
                 <td>
-                  <img v-if="area.imageUrl" :src="area.imageUrl" :alt="area.name" style="width: 50px; height: 50px; object-fit: cover;" />
+                  <img v-if="area.fullImageUrl" :src="area.fullImageUrl" alt="" style="width: 50px; height: 50px; object-fit: cover;" />
                   <span v-else>-</span>
                 </td>
                 <td>
@@ -106,7 +108,7 @@
                 <td>{{ spot.visitingDuration || '-' }}</td>
                 <td>{{ spot.tags || '-' }}</td>
                 <td>
-                  <img v-if="spot.imageUrl" :src="spot.imageUrl" :alt="spot.name" style="width: 50px; height: 50px; object-fit: cover;" />
+                  <img v-if="spot.fullImageUrl" :src="spot.fullImageUrl" alt="" style="width: 50px; height: 50px; object-fit: cover;" />
                   <span v-else>-</span>
                 </td>
                 <td>
@@ -147,7 +149,7 @@
             <label>选择图片</label>
             <input type="file" accept="image/*" @change="handleAreaImageUpload" />
             <div v-if="areaFormData.imageUrl" class="image-preview">
-              <img :src="areaFormData.imageUrl" alt="预览图片" style="max-width: 200px; max-height: 150px;" />
+              <img :src="getFullImageUrl(areaFormData.imageUrl)" alt="预览图片" style="max-width: 200px; max-height: 150px;" />
               <button type="button" class="remove-image" @click="removeAreaImage">移除</button>
             </div>
           </div>
@@ -158,6 +160,12 @@
           <div class="form-group">
             <label>标签（逗号分隔）</label>
             <input type="text" v-model="areaFormData.tags" placeholder="例如：自然景观,历史文化,休闲娱乐" />
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" v-model="areaFormData.isPublicFacility" :true-value="true" :false-value="false" />
+              是公共措施（不会在用户端显示）
+            </label>
           </div>
           <div class="modal-actions">
             <button type="button" class="cancel-btn" @click="closeAreaModal">取消</button>
@@ -197,7 +205,7 @@
             <label>选择图片</label>
             <input type="file" accept="image/*" @change="handleSpotImageUpload" />
             <div v-if="spotFormData.imageUrl" class="image-preview">
-              <img :src="spotFormData.imageUrl" alt="预览图片" style="max-width: 200px; max-height: 150px;" />
+              <img :src="getFullImageUrl(spotFormData.imageUrl)" alt="预览图片" style="max-width: 200px; max-height: 150px;" />
               <button type="button" class="remove-image" @click="removeSpotImage">移除</button>
             </div>
           </div>
@@ -233,6 +241,7 @@ export default {
       showEditAreaModal: false,
       showAddSpotModal: false,
       showEditSpotModal: false,
+      API_BASE_URL: 'http://localhost:8080', // 后端服务器地址
       areaFormData: {
         id: null,
         name: '',
@@ -241,7 +250,8 @@ export default {
         imageUrl: '',
         openingHours: '',
         price: '',
-        tags: ''
+        tags: '',
+        isPublicFacility: false
       },
       spotFormData: {
         id: null,
@@ -261,8 +271,12 @@ export default {
   methods: {
     async loadScenicAreas() {
       try {
-        const response = await apiClient.get('/api/large-areas')
-        this.scenicAreas = response.data
+        const response = await apiClient.get('/api/large-areas/all')
+        // 处理图片路径，将相对路径转换为完整 URL
+        this.scenicAreas = response.data.map(area => ({
+          ...area,
+          fullImageUrl: area.imageUrl ? this.API_BASE_URL + area.imageUrl : null
+        }))
       } catch (error) {
         console.error('加载大景区列表失败:', error)
         alert('加载大景区列表失败，请稍后重试')
@@ -271,22 +285,30 @@ export default {
     async loadScenicSpots() {
       try {
         const response = await apiClient.get('/api/small-spots')
-        this.scenicSpots = response.data
+        // 处理图片路径，将相对路径转换为完整 URL
+        this.scenicSpots = response.data.map(spot => ({
+          ...spot,
+          fullImageUrl: spot.imageUrl ? this.API_BASE_URL + spot.imageUrl : null
+        }))
       } catch (error) {
         console.error('加载小景点列表失败:', error)
         alert('加载小景点列表失败，请稍后重试')
       }
     },
     editArea(area) {
-      this.areaFormData = { 
+      console.log('编辑景区数据:', area)
+      console.log('isPublicFacility 值:', area.isPublicFacility)
+      this.areaFormData = {
         id: area.id,
-        name: area.name || '',
+        name: area.name,
         description: area.description || '',
         location: area.location || '',
         imageUrl: area.imageUrl || '',
         openingHours: area.openingHours || '',
         price: area.price || '',
-        tags: area.tags || ''
+        tags: area.tags || '',
+        isPublicFacility: area.isPublicFacility === true || area.isPublicFacility === 1 || area.isPublicFacility === '1',
+        imageFile: null
       }
       this.showEditAreaModal = true
     },
@@ -305,11 +327,42 @@ export default {
     },
     async saveArea() {
       try {
+        // 先处理图片上传
+        if (this.areaFormData.imageFile) {
+          const formData = new FormData()
+          formData.append('image', this.areaFormData.imageFile)
+          const response = await apiClient.post('/api/upload/image', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data'
+            }
+          })
+          if (response.data.status === 'success') {
+            // 保存图片 URL（去除前缀的路径）
+            const url = response.data.imageUrl
+            this.areaFormData.imageUrl = url.startsWith(this.API_BASE_URL) ? url.replace(this.API_BASE_URL, '') : url
+          }
+        }
+            
+        // 确保 isPublicFacility 是布尔值
+        const payload = {
+          ...this.areaFormData,
+          isPublicFacility: Boolean(this.areaFormData.isPublicFacility)
+        }
+        delete payload.imageFile // 删除 file 对象，不要发送给后端
+            
+        console.log('保存景区数据:', payload)
+            
+        // 保存景区信息
         if (this.showAddAreaModal) {
-          await apiClient.post('/api/large-areas', this.areaFormData)
+          // 添加模式：使用 POST
+          await apiClient.post('/api/large-areas', payload)
           alert('添加成功')
         } else {
-          await apiClient.put(`/api/large-areas/${this.areaFormData.id}`, this.areaFormData)
+          // 编辑模式：使用 PUT，确保有 ID
+          if (!this.areaFormData.id) {
+            throw new Error('缺少景区 ID')
+          }
+          await apiClient.put(`/api/large-areas/${this.areaFormData.id}`, payload)
           alert('更新成功')
         }
         this.closeAreaModal()
@@ -330,34 +383,21 @@ export default {
         imageUrl: '',
         openingHours: '',
         price: '',
-        tags: ''
+        tags: '',
+        imageFile: null
       }
     },
     handleAreaImageUpload(event) {
       const file = event.target.files[0]
       if (file) {
-        // 创建临时URL用于预览
+        // 直接保存文件对象，在保存景区信息时统一上传
+        this.areaFormData.imageFile = file
+        // 创建临时 URL 用于预览
         const reader = new FileReader()
         reader.onload = (e) => {
           this.areaFormData.imageUrl = e.target.result
         }
         reader.readAsDataURL(file)
-        
-        // 上传文件到后端
-        const formData = new FormData()
-        formData.append('image', file)
-        apiClient.post('/api/upload/image', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        }).then(response => {
-          if (response.data.status === 'success') {
-            this.areaFormData.imageUrl = response.data.imageUrl
-          }
-        }).catch(error => {
-          console.error('上传失败:', error)
-          alert('上传失败，请稍后重试')
-        })
       }
     },
     removeAreaImage() {
@@ -371,7 +411,8 @@ export default {
         description: spot.description || '',
         imageUrl: spot.imageUrl || '',
         visitingDuration: spot.visitingDuration || 60,
-        tags: spot.tags || ''
+        tags: spot.tags || '',
+        imageFile: null
       }
       this.showEditSpotModal = true
     },
@@ -389,6 +430,22 @@ export default {
     },
     async saveSpot() {
       try {
+        // 先处理图片上传
+        if (this.spotFormData.imageFile) {
+          const formData = new FormData()
+          formData.append('image', this.spotFormData.imageFile)
+          const response = await apiClient.post('/api/upload/image', formData, {
+            headers: {
+              'Content-Type': 'multipart/form-data'
+            }
+          })
+          if (response.data.status === 'success') {
+            // 保存图片URL
+            this.spotFormData.imageUrl = response.data.imageUrl
+          }
+        }
+        
+        // 保存小景点信息
         if (this.showAddSpotModal) {
           await apiClient.post('/api/small-spots', this.spotFormData)
           alert('添加成功')
@@ -413,7 +470,8 @@ export default {
         description: '',
         imageUrl: '',
         visitingDuration: 60,
-        tags: ''
+        tags: '',
+        imageFile: null
       }
     },
     handleSpotImageUpload(event) {
@@ -425,26 +483,23 @@ export default {
           this.spotFormData.imageUrl = e.target.result
         }
         reader.readAsDataURL(file)
-        
-        // 上传文件到后端
-        const formData = new FormData()
-        formData.append('image', file)
-        apiClient.post('/api/upload/image', formData, {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        }).then(response => {
-          if (response.data.status === 'success') {
-            this.spotFormData.imageUrl = response.data.imageUrl
-          }
-        }).catch(error => {
-          console.error('上传失败:', error)
-          alert('上传失败，请稍后重试')
-        })
+        // 保存文件对象，稍后在保存小景点信息时上传
+        this.spotFormData.imageFile = file
       }
     },
     removeSpotImage() {
       this.spotFormData.imageUrl = ''
+      this.spotFormData.imageFile = null
+    },
+    // 获取完整的图片 URL
+    getFullImageUrl(imageUrl) {
+      if (!imageUrl) return ''
+      // 如果已经是完整 URL，直接返回
+      if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+        return imageUrl
+      }
+      // 否则拼接后端服务器地址
+      return this.API_BASE_URL + imageUrl
     }
   }
 }

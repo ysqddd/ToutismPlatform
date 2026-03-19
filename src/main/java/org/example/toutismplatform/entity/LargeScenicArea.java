@@ -1,5 +1,6 @@
 package org.example.toutismplatform.entity;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.time.LocalDateTime;
@@ -13,12 +14,8 @@ public class LargeScenicArea {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @Column(name = "product_id", nullable = false)
-    private Long productId;
-    
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "product_id", insertable = false, updatable = false)
-    private Product product;
+    @ManyToMany(mappedBy = "largeScenicAreas", fetch = FetchType.LAZY)
+    private List<Product> products;
     
     @Column(nullable = false)
     private String name;
@@ -40,6 +37,10 @@ public class LargeScenicArea {
     
     @Column(length = 500)
     private String tags;
+    
+    @Column(name = "is_public_facility", nullable = false, columnDefinition = "tinyint default 0")
+    @JsonProperty("isPublicFacility")
+    private boolean isPublicFacility;
     
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

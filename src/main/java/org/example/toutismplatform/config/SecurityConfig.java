@@ -48,16 +48,19 @@ public class SecurityConfig {
         http.cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(authorize -> authorize
-                .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/images/**").permitAll()  // 静态图片资源允许公开访问
+                .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/admin/login", "/api/auth/logout").permitAll()
+                .requestMatchers("/api/auth/current-user").authenticated()
                 .requestMatchers("/api/products/**").permitAll()  // 商品信息允许公开访问
                 .requestMatchers("/api/large-areas/**").permitAll()  // 大景区信息允许公开访问
                 .requestMatchers("/api/small-spots/**").permitAll()  // 小景点信息允许公开访问
                 .requestMatchers("/api/employees/**").permitAll()  // 员工管理允许公开访问
                 .requestMatchers("/api/permissions/**").permitAll()  // 权限管理允许公开访问
                 .requestMatchers("/api/rag/**").permitAll()  // RAG API允许公开访问
+                .requestMatchers("/api/upload/**").permitAll()  // 文件上传允许公开访问
                 .requestMatchers("/api/users/**").hasRole("ADMIN")
                 .requestMatchers("/api/cart/**").authenticated()
-                .anyRequest().authenticated()
+                .anyRequest().permitAll()
             )
             .sessionManagement(session -> session
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS)

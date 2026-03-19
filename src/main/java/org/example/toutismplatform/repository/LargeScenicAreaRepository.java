@@ -8,5 +8,4 @@ import java.util.List;
 
 @Repository
 public interface LargeScenicAreaRepository extends JpaRepository<LargeScenicArea, Long> {
-    List<LargeScenicArea> findByProductId(Long productId);
 }

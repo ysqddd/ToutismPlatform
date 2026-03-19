@@ -11,7 +11,7 @@
  Target Server Version : 80034
  File Encoding         : 65001
 
- Date: 15/03/2026 09:41:01
+ Date: 16/03/2026 13:46:02
 */
 
 SET NAMES utf8mb4;
@@ -40,7 +40,7 @@ CREATE TABLE `employee`  (
   INDEX `idx_status`(`status`) USING BTREE,
   INDEX `idx_role_id`(`role_id`) USING BTREE,
   CONSTRAINT `fk_employee_role` FOREIGN KEY (`role_id`) REFERENCES `role` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE
-) ENGINE = InnoDB AUTO_INCREMENT = 2 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 3 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of employee
@@ -54,7 +54,6 @@ INSERT INTO `employee` VALUES (2, 'admin', '$2a$10$Xv8KvyuP5oLMhAle4L9Tb.FTTfM2S
 DROP TABLE IF EXISTS `large_scenic_area`;
 CREATE TABLE `large_scenic_area`  (
   `id` bigint(0) NOT NULL AUTO_INCREMENT,
-  `product_id` bigint(0) NOT NULL COMMENT '所属商品 ID',
   `name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '大景区名称',
   `description` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '大景区专属描述',
   `location` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '地理位置',
@@ -62,16 +61,20 @@ CREATE TABLE `large_scenic_area`  (
   `opening_hours` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '开放时间',
   `price` decimal(10, 2) NOT NULL COMMENT '价格',
   `tags` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '标签（逗号分隔）',
+  `is_public_facility` tinyint(0) NOT NULL DEFAULT 0,
   `created_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
   `updated_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
   PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_product_id`(`product_id`) USING BTREE,
-  CONSTRAINT `fk_large_area_product` FOREIGN KEY (`product_id`) REFERENCES `product` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+  INDEX `idx_is_public_facility`(`is_public_facility`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of large_scenic_area
 -- ----------------------------
+INSERT INTO `large_scenic_area` VALUES (1, '嵩阳景区', '嵩阳书院始建于北魏太和八年（公元484年），当时是佛教活动场所，名为嵩阳寺。隋唐年间成为道教活动场所，唐高宗和武则天曾两次以这里为行宫。北宋时期成为著名的教育场所，名儒范仲淹、程颐、程颢、司马光等人都曾在此讲学，司马光的历史巨著《资治通鉴》有一部分就是在书院完成的。这些名儒的讲学活动，不仅使嵩阳书院成为北宋四大书院之首，而且也使嵩阳书院成为宋代理学的发源地之一。', '景区东北方', '/images/4f377437-6347-4790-a609-069a64170bca_2-1499592162278.jpg', '8:00-20:00', 32.00, '北宋四大书院之首,宋代理学的发源地', 0, '2026-03-16 04:50:54', '2026-03-16 05:02:01');
+INSERT INTO `large_scenic_area` VALUES (2, '景区北大门', '无', '正北方', '/images/ec24ff52-0d8c-420e-987e-ef111314c5dc_生成景区北大门图片.png', '8:00-20:00', 0.00, '无', 1, '2026-03-16 05:15:05', '2026-03-16 05:29:27');
+INSERT INTO `large_scenic_area` VALUES (3, '西大门', '无', '正西方向', '/images/44253beb-94ce-453d-a210-864f11576e62_生成景区北大门图片 (1).png', '8:00-20:00', 0.00, '无', 1, '2026-03-16 05:37:11', '2026-03-16 05:37:11');
+INSERT INTO `large_scenic_area` VALUES (4, '书证沟景区', '树正沟为九寨沟主沟，是九寨沟秀丽风景的大门，在九寨沟呈“Y”字形分布的三条沟谷中处于下支]。共有各种湖泊（海子）40余个，约占九寨沟景区全部湖泊的40%，40多个湖泊，犹如40多面晶莹的宝镜，顺沟叠延五、六公里。水光潋滟，碧波荡漾，鸟雀鸣唱，芦苇摇曳。沟内主要景点包括盆景滩、芦苇海、火花海、卧龙海、树正群海、树正瀑布、老虎海、犀牛海、双龙海及诺日朗瀑布等 [4] [8] [12]。其中，火花海在2017年地震中堤坝崩塌，后经生态修复恢复了湖泊景观；树正群海由大小19块海子组成，森林、湖泊、小瀑布相错相连', '景区西北方', '/images/2dfd36d9-88cd-44f7-b8e8-e56bdb81c2df_R-C.jpg', '8:00-20:00', 43.00, '自然美景', 0, '2026-03-16 05:45:06', '2026-03-16 05:45:06');
 
 -- ----------------------------
 -- Table structure for non_login_employee
@@ -175,6 +178,27 @@ CREATE TABLE `product`  (
 -- ----------------------------
 
 -- ----------------------------
+-- Table structure for product_large_scenic_area
+-- ----------------------------
+DROP TABLE IF EXISTS `product_large_scenic_area`;
+CREATE TABLE `product_large_scenic_area`  (
+  `id` bigint(0) NOT NULL AUTO_INCREMENT,
+  `product_id` bigint(0) NOT NULL COMMENT '商品 ID',
+  `large_scenic_area_id` bigint(0) NOT NULL COMMENT '大景区 ID',
+  `created_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_product_area`(`product_id`, `large_scenic_area_id`) USING BTREE,
+  INDEX `idx_product_id`(`product_id`) USING BTREE,
+  INDEX `idx_large_scenic_area_id`(`large_scenic_area_id`) USING BTREE,
+  CONSTRAINT `fk_product_area_large_area` FOREIGN KEY (`large_scenic_area_id`) REFERENCES `large_scenic_area` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_product_area_product` FOREIGN KEY (`product_id`) REFERENCES `product` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of product_large_scenic_area
+-- ----------------------------
+
+-- ----------------------------
 -- Table structure for role
 -- ----------------------------
 DROP TABLE IF EXISTS `role`;
@@ -252,6 +276,50 @@ INSERT INTO `role_permission` VALUES (33, 5, 13, '2026-03-14 20:05:55');
 INSERT INTO `role_permission` VALUES (34, 5, 14, '2026-03-14 20:05:55');
 INSERT INTO `role_permission` VALUES (35, 5, 15, '2026-03-14 20:05:55');
 INSERT INTO `role_permission` VALUES (36, 5, 16, '2026-03-14 20:05:55');
+
+-- ----------------------------
+-- Table structure for scenic_area_edge
+-- ----------------------------
+DROP TABLE IF EXISTS `scenic_area_edge`;
+CREATE TABLE `scenic_area_edge`  (
+  `id` bigint(0) NOT NULL AUTO_INCREMENT,
+  `created_at` datetime(6) NOT NULL,
+  `distance` decimal(10, 2) NOT NULL,
+  `duration` int(0) NOT NULL,
+  `from_area_id` bigint(0) NOT NULL,
+  `to_area_id` bigint(0) NOT NULL,
+  `updated_at` datetime(6) NOT NULL,
+  `description` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
+  PRIMARY KEY (`id`) USING BTREE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of scenic_area_edge
+-- ----------------------------
+
+-- ----------------------------
+-- Table structure for scenic_edge
+-- ----------------------------
+DROP TABLE IF EXISTS `scenic_edge`;
+CREATE TABLE `scenic_edge`  (
+  `id` bigint(0) NOT NULL AUTO_INCREMENT,
+  `start_area_id` bigint(0) NOT NULL COMMENT '起始大景区 ID',
+  `end_area_id` bigint(0) NOT NULL COMMENT '结束大景区 ID',
+  `distance` double NOT NULL COMMENT '距离（米）',
+  `time_cost` int(0) NOT NULL COMMENT '时间成本（分钟）',
+  `path_description` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '路径描述',
+  `created_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+  `updated_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_start_area_id`(`start_area_id`) USING BTREE,
+  INDEX `idx_end_area_id`(`end_area_id`) USING BTREE,
+  CONSTRAINT `fk_edge_end_area` FOREIGN KEY (`end_area_id`) REFERENCES `large_scenic_area` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_edge_start_area` FOREIGN KEY (`start_area_id`) REFERENCES `large_scenic_area` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of scenic_edge
+-- ----------------------------
 
 -- ----------------------------
 -- Table structure for shopping_cart
