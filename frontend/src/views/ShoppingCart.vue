@@ -88,7 +88,13 @@ export default {
       if (!this.userId) return
       try {
         const response = await apiClient.get(`/api/cart?userId=${this.userId}`)
-        this.cartItems = response.data
+        // 处理后端返回的数据，转换字段名和类型
+        this.cartItems = response.data.map(item => ({
+          id: item.id,
+          name: item.productName,
+          price: item.price,
+          features: item.features ? item.features.split('; ') : []
+        }))
         // 清除旧的 localStorage 数据
         localStorage.removeItem('shoppingCart')
       } catch (error) {

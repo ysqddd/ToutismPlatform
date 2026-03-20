@@ -30,6 +30,7 @@
           <p class="product-desc">{{ product.description || '暂无描述' }}</p>
           <div class="product-footer">
             <span class="price">¥{{ product.price }}</span>
+            <button class="detail-btn" @click="viewProductDetail(product)">查看详情</button>
             <button class="book-btn" @click="bookProduct(product)">立即预订</button>
           </div>
         </div>
@@ -100,6 +101,10 @@ export default {
           console.error('添加失败:', error)
           alert('添加失败，请重试')
         })
+    },
+    viewProductDetail(product) {
+      // 跳转到产品详情页
+      this.$router.push(`/product/${product.id}`)
     },
     nextSlide() {
       this.currentSlide = (this.currentSlide + 1) % this.slides.length

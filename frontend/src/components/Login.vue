@@ -80,21 +80,37 @@ export default {
       this.isLoading = true;
       this.error = '';
       try {
+          // 清除所有localStorage数据，确保使用新的token
+          localStorage.clear()
+          console.log('=== 登录前 ===: 已清除所有localStorage数据')
+          
           const response = await apiClient.post('/api/auth/login', this.form)
+          console.log('=== 登录响应 ===:', response.data)
           localStorage.setItem('token', response.data.token)
           localStorage.setItem('username', response.data.username)
+          console.log('=== 登录后 ===: 已存储新的token和用户名')
+          
+          // 添加一个小延迟，确保后端会话已建立
+          await new Promise(resolve => setTimeout(resolve, 100))
           
           // 获取用户详细信息（包括 ID）
           try {
+            console.log('=== 开始获取当前用户信息 ===')
             const userResponse = await apiClient.get('/api/auth/current-user')
+            console.log('=== 用户信息响应 ===:', userResponse.data)
             localStorage.setItem('userId', userResponse.data.id)
+            console.log('=== 用户 ID 已保存 ===:', userResponse.data.id)
           } catch (err) {
             console.error('获取用户 ID 失败:', err)
+            console.error('错误详情:', err.response?.data)
+            console.error('状态码:', err.response?.status)
+            // 即使获取用户信息失败，也不影响登录成功
           }
           
           this.$router.push('/')
         } catch (err) {
           this.error = err.response?.data || '登录失败，请检查用户名和密码'
+          console.error('登录错误:', err)
         } finally {
           this.isLoading = false;
         }

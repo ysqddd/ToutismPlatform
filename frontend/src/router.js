@@ -69,6 +69,18 @@ const routes = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/product/:id',
+    name: 'ProductDetail',
+    component: () => import('./views/ProductDetail.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/scenic/:id',
+    name: 'ScenicDetail',
+    component: () => import('./views/ScenicDetail.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/admin/home',
     name: 'AdminHome',
     component: AdminHome,
@@ -124,9 +136,17 @@ router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
   const adminToken = localStorage.getItem('adminToken')
   
-  if (requiresAdmin && !adminToken) {
+  // 检查token是否有效
+  const isTokenValid = token && token.length > 0
+  const isAdminTokenValid = adminToken && adminToken.length > 0
+  
+  if (requiresAdmin && !isAdminTokenValid) {
+    // 清除无效的管理员token
+    localStorage.clear()
     next('/admin/login')
-  } else if (requiresAuth && !token) {
+  } else if (requiresAuth && !isTokenValid) {
+    // 清除无效的用户token
+    localStorage.clear()
     next('/login')
   } else {
     next()
