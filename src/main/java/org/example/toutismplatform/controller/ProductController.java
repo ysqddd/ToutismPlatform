@@ -146,7 +146,7 @@ public class ProductController {
             LargeScenicArea area = areas.get(i);
             System.out.println("景区 " + (i+1) + ": " + area.getName() + 
                              ", 价格：" + area.getPrice() + 
-                             ", 是否公共：" + area.isPublicFacility());
+                             ", 地点类型：" + area.getIsAreaType());
             
             if (area.getPrice() != null) {
                 if (i < 3) {

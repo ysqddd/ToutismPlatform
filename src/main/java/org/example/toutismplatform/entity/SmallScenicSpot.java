@@ -22,6 +22,9 @@ public class SmallScenicSpot {
     @Column(nullable = false)
     private String name;
     
+    @Column(name = "is_spot_type", nullable = false, columnDefinition = "int default 0")
+    private Integer isSpotType = 0;
+    
     @Column(columnDefinition = "TEXT")
     private String description;
     

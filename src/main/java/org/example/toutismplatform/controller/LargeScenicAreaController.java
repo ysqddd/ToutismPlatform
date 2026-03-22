@@ -18,11 +18,10 @@ public class LargeScenicAreaController {
     @GetMapping
     public ResponseEntity<List<LargeScenicArea>> getAllLargeAreas() {
         List<LargeScenicArea> areas = largeScenicAreaRepository.findAll();
-        // 过滤掉公共措施，只返回非公共措施的景区
-        List<LargeScenicArea> nonPublicAreas = areas.stream()
-                .filter(area -> !area.isPublicFacility())
+        List<LargeScenicArea> scenicAreas = areas.stream()
+                .filter(area -> area.getIsAreaType() == null || area.getIsAreaType() == 0)
                 .collect(java.util.stream.Collectors.toList());
-        return ResponseEntity.ok(nonPublicAreas);
+        return ResponseEntity.ok(scenicAreas);
     }
     
     // 获取所有大景区（包括公共措施，供管理员使用）
@@ -73,8 +72,9 @@ public class LargeScenicAreaController {
                     if (largeArea.getTags() != null) {
                         existingArea.setTags(largeArea.getTags());
                     }
-                    // 更新是否是公共措施
-                    existingArea.setPublicFacility(largeArea.isPublicFacility());
+                    if (largeArea.getIsAreaType() != null) {
+                        existingArea.setIsAreaType(largeArea.getIsAreaType());
+                    }
                     return ResponseEntity.ok(largeScenicAreaRepository.save(existingArea));
                 })
                 .orElse(ResponseEntity.notFound().build());

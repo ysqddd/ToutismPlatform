@@ -40,9 +40,9 @@ public class LargeScenicArea {
     @Column(length = 500)
     private String tags;
     
-    @Column(name = "is_public_facility", nullable = false, columnDefinition = "tinyint default 0")
-    @JsonProperty("isPublicFacility")
-    private boolean isPublicFacility;
+    @Column(name = "is_area_type", nullable = false, columnDefinition = "int default 0")
+    @JsonProperty("isAreaType")
+    private Integer isAreaType = 0;
     
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

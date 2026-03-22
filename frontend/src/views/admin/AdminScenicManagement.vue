@@ -46,7 +46,7 @@
                 <th>开放时间</th>
                 <th>价格</th>
                 <th>标签</th>
-                <th>是否公共措施</th>
+                <th>地点类型</th>
                 <th>图片</th>
                 <th>操作</th>
               </tr>
@@ -59,7 +59,7 @@
                 <td>{{ area.openingHours || '-' }}</td>
                 <td>{{ area.price || '-' }}</td>
                 <td>{{ area.tags || '-' }}</td>
-                <td>{{ area.isPublicFacility ? '是' : '否' }}</td>
+                <td>{{ area.isAreaType === 1 ? '非景区地点' : '景区' }}</td>
                 <td>
                   <img v-if="area.fullImageUrl" :src="area.fullImageUrl" alt="" style="width: 50px; height: 50px; object-fit: cover;" />
                   <span v-else>-</span>
@@ -92,6 +92,7 @@
                 <th>ID</th>
                 <th>景点名称</th>
                 <th>所属景区</th>
+                <th>类型</th>
                 <th>介绍</th>
                 <th>游览时长 (分钟)</th>
                 <th>标签</th>
@@ -104,6 +105,7 @@
                 <td>{{ spot.id }}</td>
                 <td>{{ spot.name }}</td>
                 <td>{{ spot.areaName || '-' }}</td>
+                <td>{{ spot.isSpotType === 1 ? '公共设施' : '景点' }}</td>
                 <td>{{ spot.description || '-' }}</td>
                 <td>{{ spot.visitingDuration || '-' }}</td>
                 <td>{{ spot.tags || '-' }}</td>
@@ -163,8 +165,8 @@
           </div>
           <div class="form-group">
             <label>
-              <input type="checkbox" v-model="areaFormData.isPublicFacility" :true-value="true" :false-value="false" />
-              是公共措施（不会在用户端显示）
+              <input type="checkbox" v-model="areaFormData.isAreaType" :true-value="1" :false-value="0" />
+              是非景区地点（酒店、火车站、高速收费站等，不会在用户端景区列表显示）
             </label>
           </div>
           <div class="modal-actions">
@@ -192,6 +194,12 @@
                 {{ area.name }}
               </option>
             </select>
+          </div>
+          <div class="form-group">
+            <label>
+              <input type="checkbox" v-model="spotFormData.isSpotType" :true-value="1" :false-value="0" />
+              是公共设施（洗手间、休息区、售票处等）
+            </label>
           </div>
           <div class="form-group">
             <label>介绍</label>
@@ -251,12 +259,13 @@ export default {
         openingHours: '',
         price: '',
         tags: '',
-        isPublicFacility: false
+        isAreaType: 0
       },
       spotFormData: {
         id: null,
         name: '',
         largeAreaId: null,
+        isSpotType: 0,
         description: '',
         imageUrl: '',
         visitingDuration: 60,
@@ -311,7 +320,7 @@ export default {
     },
     editArea(area) {
       console.log('编辑景区数据:', area)
-      console.log('isPublicFacility 值:', area.isPublicFacility)
+      console.log('isAreaType 值:', area.isAreaType)
       this.areaFormData = {
         id: area.id,
         name: area.name,
@@ -321,7 +330,7 @@ export default {
         openingHours: area.openingHours || '',
         price: area.price || '',
         tags: area.tags || '',
-        isPublicFacility: area.isPublicFacility === true || area.isPublicFacility === 1 || area.isPublicFacility === '1',
+        isAreaType: area.isAreaType === 1 ? 1 : 0,
         imageFile: null
       }
       this.showEditAreaModal = true
@@ -357,10 +366,10 @@ export default {
           }
         }
             
-        // 确保 isPublicFacility 是布尔值
+        // 确保 isAreaType 是整数值
         const payload = {
           ...this.areaFormData,
-          isPublicFacility: Boolean(this.areaFormData.isPublicFacility)
+          isAreaType: this.areaFormData.isAreaType ? 1 : 0
         }
         delete payload.imageFile // 删除 file 对象，不要发送给后端
             
@@ -398,6 +407,7 @@ export default {
         openingHours: '',
         price: '',
         tags: '',
+        isAreaType: 0,
         imageFile: null
       }
     },
@@ -422,6 +432,7 @@ export default {
         id: spot.id,
         name: spot.name || '',
         largeAreaId: spot.largeAreaId || null,
+        isSpotType: spot.isSpotType === 1 ? 1 : 0,
         description: spot.description || '',
         imageUrl: spot.imageUrl || '',
         visitingDuration: spot.visitingDuration || 60,
@@ -481,6 +492,7 @@ export default {
         id: null,
         name: '',
         largeAreaId: null,
+        isSpotType: 0,
         description: '',
         imageUrl: '',
         visitingDuration: 60,

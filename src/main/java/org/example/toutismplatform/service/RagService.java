@@ -52,15 +52,14 @@ public class RagService {
             context.append("描述：").append(area.getDescription() != null ? area.getDescription() : "暂无描述").append("\n");
             context.append("位置：").append(area.getLocation() != null ? area.getLocation() : "暂无位置信息").append("\n");
             context.append("开放时间：").append(area.getOpeningHours() != null ? area.getOpeningHours() : "暂无开放时间").append("\n");
-            // 如果是公共措施，显示为免费；否则显示实际价格
-            if (area.isPublicFacility()) {
-                context.append("价格：免费（公共设施，不收取门票费用）\n");
+            if (area.getIsAreaType() != null && area.getIsAreaType() == 1) {
+                context.append("价格：免费（非景区地点，不收取门票费用）\n");
             } else {
                 context.append("价格：").append(area.getPrice()).append("元\n");
             }
             context.append("标签：").append(area.getTags() != null ? area.getTags() : "暂无标签").append("\n");
-            if (area.isPublicFacility()) {
-                context.append("类型：公共入口设施（游客可通过此门进入收费景区）\n");
+            if (area.getIsAreaType() != null && area.getIsAreaType() == 1) {
+                context.append("类型：非景区地点（酒店、火车站、高速收费站等）\n");
             }
             context.append("\n");
         }
