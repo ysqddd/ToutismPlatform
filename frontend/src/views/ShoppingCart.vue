@@ -11,29 +11,40 @@
     <div v-else class="cart-items">
       <div 
         v-for="(item, index) in cartItems" 
-        :key="index" 
+        :key="item.id" 
         class="cart-item-card"
       >
         <div class="cart-item-header">
-          <h3>{{ item.name }}</h3>
+          <div class="item-type-badge">
+            {{ item.itemType === 'PRODUCT' ? '🎁 套餐' : '🎫 景区门票' }}
+          </div>
+          <h3>{{ item.itemName }}</h3>
           <button class="remove-btn" @click="removeItem(index)">×</button>
+        </div>
+        <div v-if="item.imageUrl" class="cart-item-image">
+          <img :src="getImageUrl(item.imageUrl)" :alt="item.itemName">
         </div>
         <div class="cart-item-price">
           <span class="currency">¥</span>
           <span class="amount">{{ item.price }}</span>
-          <span class="period">/年</span>
         </div>
-        <ul class="cart-item-features">
-          <li v-for="(feature, idx) in item.features" :key="idx">
-            ✓ {{ feature }}
-          </li>
-        </ul>
+        <div class="quantity-control">
+          <button class="quantity-btn" @click="updateQuantity(item, -1)">-</button>
+          <span class="quantity-value">{{ item.quantity }}</span>
+          <button class="quantity-btn" @click="updateQuantity(item, 1)">+</button>
+        </div>
+        <div class="cart-item-total">
+          小计：¥{{ (item.price * item.quantity).toFixed(2) }}
+        </div>
+        <div v-if="item.features" class="cart-item-features">
+          <p>{{ item.features }}</p>
+        </div>
       </div>
       
       <div class="cart-summary">
         <div class="summary-row">
           <span>商品数量：</span>
-          <span>{{ cartItems.length }} 个</span>
+          <span>{{ totalQuantity }} 件</span>
         </div>
         <div class="summary-row total">
           <span>总计：</span>
@@ -58,7 +69,10 @@ export default {
   },
   computed: {
     totalPrice() {
-      return this.cartItems.reduce((sum, item) => sum + (parseFloat(item.price) || 0), 0).toFixed(2)
+      return this.cartItems.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity || 0), 0).toFixed(2)
+    },
+    totalQuantity() {
+      return this.cartItems.reduce((sum, item) => sum + item.quantity, 0)
     }
   },
   created() {
@@ -66,6 +80,11 @@ export default {
     this.loadUserInfo()
   },
   methods: {
+    getImageUrl(imageUrl) {
+      if (!imageUrl) return ''
+      if (imageUrl.startsWith('http')) return imageUrl
+      return `http://localhost:8080${imageUrl}`
+    },
     async loadUserInfo() {
       try {
         // 尝试从后端获取用户信息
@@ -88,17 +107,32 @@ export default {
       if (!this.userId) return
       try {
         const response = await apiClient.get(`/api/cart?userId=${this.userId}`)
-        // 处理后端返回的数据，转换字段名和类型
         this.cartItems = response.data.map(item => ({
           id: item.id,
-          name: item.productName,
+          itemType: item.itemType || 'PRODUCT',
+          itemId: item.itemId,
+          itemName: item.itemName || item.productName,
           price: item.price,
-          features: item.features ? item.features.split('; ') : []
+          imageUrl: item.imageUrl,
+          features: item.features,
+          quantity: item.quantity || 1
         }))
         // 清除旧的 localStorage 数据
         localStorage.removeItem('shoppingCart')
       } catch (error) {
         console.error('加载购物车失败:', error)
+      }
+    },
+    async updateQuantity(item, delta) {
+      const newQuantity = item.quantity + delta
+      if (newQuantity < 1) return
+      
+      try {
+        await apiClient.put(`/api/cart/${item.id}/quantity?quantity=${newQuantity}`)
+        item.quantity = newQuantity
+      } catch (error) {
+        console.error('更新数量失败:', error)
+        alert('更新失败，请重试')
       }
     },
     async removeItem(index) {
@@ -229,12 +263,24 @@ export default {
   margin-bottom: 20px;
   padding-bottom: 15px;
   border-bottom: 2px solid #f0f0f0;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.item-type-badge {
+  padding: 5px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: bold;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
 }
 
 .cart-item-header h3 {
   color: #333;
   font-size: 22px;
   margin: 0;
+  flex: 1;
 }
 
 .remove-btn {
@@ -256,9 +302,23 @@ export default {
   transform: scale(1.1);
 }
 
+.cart-item-image {
+  width: 100%;
+  max-height: 200px;
+  overflow: hidden;
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+.cart-item-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .cart-item-price {
   text-align: center;
-  margin-bottom: 20px;
+  margin-bottom: 15px;
 }
 
 .currency {
@@ -273,26 +333,59 @@ export default {
   font-weight: bold;
 }
 
-.period {
-  font-size: 14px;
-  color: #999;
+.quantity-control {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.quantity-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 50%;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease;
+}
+
+.quantity-btn:hover {
+  transform: scale(1.1);
+}
+
+.quantity-value {
+  font-size: 20px;
+  font-weight: bold;
+  color: #333;
+  min-width: 40px;
+  text-align: center;
+}
+
+.cart-item-total {
+  text-align: center;
+  font-size: 16px;
+  font-weight: bold;
+  color: #667eea;
+  margin-bottom: 15px;
 }
 
 .cart-item-features {
-  list-style: none;
   padding: 0;
   margin: 0;
 }
 
-.cart-item-features li {
-  padding: 8px 0;
+.cart-item-features p {
+  padding: 10px 0;
   color: #666;
   font-size: 14px;
-  border-bottom: 1px solid #f5f5f5;
-}
-
-.cart-item-features li:last-child {
-  border-bottom: none;
+  line-height: 1.6;
 }
 
 .cart-summary {

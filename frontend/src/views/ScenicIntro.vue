@@ -32,6 +32,7 @@
           </div>
         </div>
         <div class="spot-actions">
+          <button class="action-btn secondary" @click="addToCart(scenic)">加入购物车</button>
           <button class="action-btn primary" @click="viewDetails(scenic)">查看详情</button>
         </div>
       </div>
@@ -83,6 +84,25 @@ export default {
     viewDetails(scenic) {
       // 跳转到景点详情页
       this.$router.push(`/scenic/${scenic.id}`)
+    },
+    addToCart(scenic) {
+      // 将景区门票添加到购物车
+      const userId = localStorage.getItem('userId')
+      if (!userId) {
+        alert('请先登录')
+        this.$router.push('/login')
+        return
+      }
+      
+      apiClient.post(`/api/cart/scenic?userId=${userId}&scenicAreaId=${scenic.id}`)
+        .then(() => {
+          alert('已添加到购物车')
+          this.$router.push('/shopping-cart')
+        })
+        .catch(error => {
+          console.error('添加失败:', error)
+          alert('添加失败，请重试')
+        })
     }
   }
 }

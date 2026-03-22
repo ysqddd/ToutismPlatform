@@ -334,20 +334,25 @@ DROP TABLE IF EXISTS `shopping_cart`;
 CREATE TABLE `shopping_cart`  (
   `id` bigint(0) NOT NULL AUTO_INCREMENT,
   `user_id` bigint(0) NOT NULL,
-  `product_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL,
+  `item_type` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT 'PRODUCT' COMMENT 'PRODUCT表示套餐, SCENIC_AREA表示单个景区',
+  `item_id` bigint(0) NULL COMMENT '对应套餐或景区的ID',
+  `item_name` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT '' COMMENT '商品或景区名称',
   `price` decimal(10, 2) NOT NULL,
-  `features` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL,
+  `image_url` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '图片URL',
+  `features` text CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL COMMENT '描述',
+  `quantity` int(0) NOT NULL DEFAULT 1 COMMENT '数量',
   `created_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
   `updated_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_user_id`(`user_id`) USING BTREE,
+  INDEX `idx_item_type`(`item_type`) USING BTREE,
   CONSTRAINT `fk_cart_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of shopping_cart
 -- ----------------------------
-INSERT INTO `shopping_cart` VALUES (1, 4, '1111', 75.00, '11', '2026-03-19 11:32:14', '2026-03-19 11:32:14');
+INSERT INTO `shopping_cart` VALUES (1, 4, 'PRODUCT', 1, '1111', 75.00, '', '11', 1, '2026-03-19 11:32:14', '2026-03-19 11:32:14');
 
 -- ----------------------------
 -- Table structure for small_scenic_spot

@@ -73,15 +73,14 @@ export default {
     },
     selectPlan(plan) {
       // 将套餐添加到购物车
-      const cartItem = {
-        userId: localStorage.getItem('userId'),
-        productId: plan.productId,
-        productName: plan.name,
-        price: plan.price,
-        features: plan.features ? plan.features.join('; ') : ''
+      const userId = localStorage.getItem('userId')
+      if (!userId) {
+        alert('请先登录')
+        this.$router.push('/login')
+        return
       }
       
-      apiClient.post('/api/cart', cartItem)
+      apiClient.post(`/api/cart/product?userId=${userId}&productId=${plan.productId}`)
         .then(() => {
           alert('已添加到购物车')
           this.$router.push('/shopping-cart')
