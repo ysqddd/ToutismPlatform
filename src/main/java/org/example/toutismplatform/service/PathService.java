@@ -19,16 +19,10 @@ public class PathService {
     @Autowired
     private ScenicAreaEdgeRepository scenicAreaEdgeRepository;
 
-    /**
-     按距离或时间计算最短路径
-     */
     public Map<String, Object> calculateShortestPath(Long startAreaId, Long endAreaId, String weightType) {
         return calculateClassicPath(startAreaId, endAreaId, weightType);
     }
 
-    /**
-     根据用户在自然语言里表达的偏好进行综合加权路径规划
-     */
     public Map<String, Object> calculatePersonalizedPath(Long startAreaId,
                                                          Long endAreaId,
                                                          Map<String, Double> preferenceWeights) {
@@ -115,7 +109,6 @@ public class PathService {
         double distanceKm = safeDecimal(edge.getDistance()) / 1000.0;
         double durationUnit = safeInt(edge.getDuration()) / 10.0;
         double costUnit = safeDecimal(edge.getCostAmount()) / 10.0;
-        double edgeIntensity = safeInt(edge.getIntensityLevel());
 
         double distanceWeight = getWeight(preferenceWeights, "distance");
         double durationWeight = getWeight(preferenceWeights, "duration");
@@ -137,37 +130,24 @@ public class PathService {
         basePenalty += distanceKm * (1.2 + distanceWeight * 2.0);
         basePenalty += durationUnit * (1.0 + durationWeight * 2.0);
         basePenalty += costUnit * (0.8 + costWeight * 2.2);
-        basePenalty += edgeIntensity * (0.6 + intensityWeight * 1.8);
 
         if (targetArea != null) {
-            basePenalty += safeInt(targetArea.getCrowdLevel()) * 0.35 * (1.0 + crowdWeight);
+            basePenalty += safeInt(targetArea.getCrowdLevel()) * 0.0 * (1.0 + crowdWeight);
             basePenalty += (safeInt(targetArea.getRecommendedVisitDuration()) / 60.0) * 0.15 * (1.0 + durationWeight);
             basePenalty += safeInt(targetArea.getIntensityLevel()) * 0.25 * intensityWeight;
         }
 
         double reward = 0.0;
         if (targetArea != null) {
-            reward += average(edge.getScenicScore(), targetArea.getNatureScore()) * natureWeight;
+            reward += safeDecimal(targetArea.getNatureScore()) * natureWeight;
             reward += safeDecimal(targetArea.getCultureScore()) * cultureWeight;
             reward += safeDecimal(targetArea.getPhotographyScore()) * photographyWeight;
-            reward += average(edge.getElderlyFriendlyScore(), targetArea.getElderlyFriendlyScore()) * elderlyWeight;
+            reward += safeDecimal(targetArea.getElderlyFriendlyScore()) * elderlyWeight;
             reward += safeDecimal(targetArea.getFamilyFriendlyScore()) * familyWeight;
             reward += safeDecimal(targetArea.getLeisureScore()) * leisureWeight;
             reward += safeDecimal(targetArea.getFoodConvenienceScore()) * foodWeight;
             reward += safeDecimal(targetArea.getRestroomConvenienceScore()) * restroomWeight;
             reward += safeDecimal(targetArea.getPopularityScore()) * popularityWeight;
-        }
-        reward += average(edge.getComfortScore(), targetArea == null ? BigDecimal.ZERO : targetArea.getLeisureScore()) * comfortWeight;
-
-        String transportMode = edge.getTransportMode() == null ? "" : edge.getTransportMode().trim().toUpperCase(Locale.ROOT);
-        if ("CABLEWAY".equals(transportMode)) {
-            reward += intensityWeight * 0.8;
-            reward += elderlyWeight * 0.6;
-            basePenalty += costWeight * 0.5;
-        } else if ("ROAD".equals(transportMode) || "SHUTTLE".equals(transportMode)) {
-            reward += comfortWeight * 0.4;
-        } else if ("WALK".equals(transportMode)) {
-            basePenalty += intensityWeight * 0.5;
         }
 
         return Math.max(0.3, basePenalty - reward * 0.9);
@@ -265,7 +245,6 @@ public class PathService {
             segmentInfo.put("distance", rawEdge.getDistance());
             segmentInfo.put("duration", rawEdge.getDuration());
             segmentInfo.put("costAmount", rawEdge.getCostAmount());
-            segmentInfo.put("transportMode", rawEdge.getTransportMode());
             segmentInfo.put("description", rawEdge.getDescription());
             segmentInfo.put("calculatedWeight", selectedEdge.weight);
             segmentDetails.add(segmentInfo);
@@ -307,10 +286,6 @@ public class PathService {
             return 0.0;
         }
         return preferenceWeights.getOrDefault(key, 0.0);
-    }
-
-    private double average(BigDecimal first, BigDecimal second) {
-        return (safeDecimal(first) + safeDecimal(second)) / 2.0;
     }
 
     private double safeDecimal(BigDecimal value) {

@@ -14,14 +14,12 @@ public class ScenicAreaEdgeController {
     @Autowired
     private ScenicAreaEdgeRepository scenicAreaEdgeRepository;
 
-    // 获取所有边
     @GetMapping
     public ResponseEntity<List<ScenicAreaEdge>> getAllEdges() {
         List<ScenicAreaEdge> edges = scenicAreaEdgeRepository.findAll();
         return ResponseEntity.ok(edges);
     }
 
-    // 根据ID获取边
     @GetMapping("/{id}")
     public ResponseEntity<ScenicAreaEdge> getEdgeById(@PathVariable Long id) {
         return scenicAreaEdgeRepository.findById(id)
@@ -29,14 +27,12 @@ public class ScenicAreaEdgeController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // 创建边
     @PostMapping
     public ResponseEntity<ScenicAreaEdge> createEdge(@RequestBody ScenicAreaEdge edge) {
         ScenicAreaEdge savedEdge = scenicAreaEdgeRepository.save(edge);
         return ResponseEntity.ok(savedEdge);
     }
 
-    // 更新边
     @PutMapping("/{id}")
     public ResponseEntity<ScenicAreaEdge> updateEdge(@PathVariable Long id, @RequestBody ScenicAreaEdge edge) {
         return scenicAreaEdgeRepository.findById(id)
@@ -56,12 +52,14 @@ public class ScenicAreaEdgeController {
                     if (edge.getDescription() != null) {
                         existingEdge.setDescription(edge.getDescription());
                     }
+                    if (edge.getCostAmount() != null) {
+                        existingEdge.setCostAmount(edge.getCostAmount());
+                    }
                     return ResponseEntity.ok(scenicAreaEdgeRepository.save(existingEdge));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // 删除边
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteEdge(@PathVariable Long id) {
         if (!scenicAreaEdgeRepository.existsById(id)) {

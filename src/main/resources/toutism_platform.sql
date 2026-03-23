@@ -11,7 +11,7 @@
  Target Server Version : 80034
  File Encoding         : 65001
 
- Date: 23/03/2026 12:14:52
+ Date: 23/03/2026 12:51:42
 */
 
 SET NAMES utf8mb4;
@@ -346,7 +346,7 @@ CREATE TABLE `scenic_area_edge`  (
 -- ----------------------------
 -- Records of scenic_area_edge
 -- ----------------------------
-INSERT INTO `scenic_area_edge` VALUES (4, 3231.00, 30, 1, 4, '2026-03-16 05:55:14.054955', '2026-03-16 05:55:14.054955', '公路', 0.00);
+INSERT INTO `scenic_area_edge` VALUES (4, 11234.00, 30, 1, 4, '2026-03-16 05:55:14.054955', '2026-03-23 04:31:03.898946', '公路', 0.00);
 
 -- ----------------------------
 -- Table structure for scenic_edge

@@ -27,26 +27,11 @@ public class ScenicAreaEdge {
     @Column(nullable = false)
     private Integer duration = 0;
 
-    @Column(name = "cost_amount", nullable = false, precision = 10, scale = 2)
-    private BigDecimal costAmount = BigDecimal.ZERO;
-
-    @Column(name = "transport_mode", nullable = false, length = 50)
-    private String transportMode = "WALK";
-
-    @Column(name = "intensity_level", nullable = false)
-    private Integer intensityLevel = 2;
-
-    @Column(name = "scenic_score", nullable = false, precision = 4, scale = 2)
-    private BigDecimal scenicScore = BigDecimal.ZERO;
-
-    @Column(name = "comfort_score", nullable = false, precision = 4, scale = 2)
-    private BigDecimal comfortScore = BigDecimal.ZERO;
-
-    @Column(name = "elderly_friendly_score", nullable = false, precision = 4, scale = 2)
-    private BigDecimal elderlyFriendlyScore = BigDecimal.ZERO;
-
     @Column(length = 500)
     private String description;
+
+    @Column(name = "cost_amount", nullable = false, precision = 10, scale = 2)
+    private BigDecimal costAmount = BigDecimal.ZERO;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -76,21 +61,6 @@ public class ScenicAreaEdge {
         }
         if (costAmount == null) {
             costAmount = BigDecimal.ZERO;
-        }
-        if (transportMode == null || transportMode.trim().isEmpty()) {
-            transportMode = "WALK";
-        }
-        if (intensityLevel == null) {
-            intensityLevel = 2;
-        }
-        if (scenicScore == null) {
-            scenicScore = BigDecimal.ZERO;
-        }
-        if (comfortScore == null) {
-            comfortScore = BigDecimal.ZERO;
-        }
-        if (elderlyFriendlyScore == null) {
-            elderlyFriendlyScore = BigDecimal.ZERO;
         }
     }
 }

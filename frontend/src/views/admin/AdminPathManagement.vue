@@ -24,6 +24,7 @@
               <th>终点景区</th>
               <th>距离 (米)</th>
               <th>预计时间 (分钟)</th>
+              <th>额外花费</th>
               <th>路径描述</th>
               <th>操作</th>
             </tr>
@@ -35,6 +36,7 @@
               <td>{{ getAreaName(edge.toAreaId) }}</td>
               <td>{{ edge.distance }}</td>
               <td>{{ edge.duration }}</td>
+              <td>{{ edge.costAmount || 0 }}</td>
               <td>{{ edge.description || '-' }}</td>
               <td>
                 <div class="action-buttons">
@@ -48,7 +50,6 @@
       </div>
     </div>
     
-    <!-- 添加/编辑路径模态框 -->
     <div v-if="showAddEdgeModal || showEditEdgeModal" class="modal-overlay" @click="closeEdgeModal">
       <div class="modal-content" @click.stop>
         <h2>{{ showAddEdgeModal ? '添加路径' : '编辑路径' }}</h2>
@@ -71,13 +72,19 @@
               </option>
             </select>
           </div>
-          <div class="form-group">
-            <label>距离 (米)</label>
-            <input type="number" v-model="edgeFormData.distance" step="0.1" required />
+          <div class="form-row">
+            <div class="form-group half">
+              <label>距离 (米)</label>
+              <input type="number" v-model="edgeFormData.distance" step="0.1" required />
+            </div>
+            <div class="form-group half">
+              <label>预计时间 (分钟)</label>
+              <input type="number" v-model="edgeFormData.duration" required />
+            </div>
           </div>
           <div class="form-group">
-            <label>预计时间 (分钟)</label>
-            <input type="number" v-model="edgeFormData.duration" required />
+            <label>额外花费 (元)</label>
+            <input type="number" v-model="edgeFormData.costAmount" step="0.01" />
           </div>
           <div class="form-group">
             <label>路径描述</label>
@@ -114,6 +121,7 @@ export default {
         toAreaId: '',
         distance: '',
         duration: '',
+        costAmount: 0,
         description: ''
       }
     }
@@ -152,6 +160,7 @@ export default {
         toAreaId: edge.toAreaId,
         distance: edge.distance,
         duration: edge.duration,
+        costAmount: edge.costAmount || 0,
         description: edge.description || ''
       }
       this.showEditEdgeModal = true
@@ -192,6 +201,7 @@ export default {
         toAreaId: '',
         distance: '',
         duration: '',
+        costAmount: 0,
         description: ''
       }
     }
@@ -372,6 +382,15 @@ export default {
   max-height: 200px;
   overflow-y: auto;
   max-width: 100%;
+}
+
+.form-row {
+  display: flex;
+  gap: 15px;
+}
+
+.form-group.half {
+  flex: 1;
 }
 
 .modal-actions {
