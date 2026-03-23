@@ -54,6 +54,9 @@ public class SecurityConfig {
                 .requestMatchers("/api/products/**").permitAll()  // 商品信息允许公开访问
                 .requestMatchers("/api/large-areas/**").permitAll()  // 大景区信息允许公开访问
                 .requestMatchers("/api/small-spots/**").permitAll()  // 小景点信息允许公开访问
+                .requestMatchers("/api/scenic-edges/**").permitAll()  // 景区边信息允许公开访问
+                .requestMatchers("/api/scenic-area-edges/**").permitAll()  // 景区边信息允许公开访问
+                .requestMatchers("/api/route-plans/**").permitAll()  // 路线规划记录允许公开访问
                 .requestMatchers("/api/employees/**").permitAll()  // 员工管理允许公开访问
                 .requestMatchers("/api/permissions/**").permitAll()  // 权限管理允许公开访问
                 .requestMatchers("/api/rag/**").permitAll()  // RAG API允许公开访问

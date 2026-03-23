@@ -91,6 +91,33 @@ public class SmallScenicSpotController {
                     if (smallSpot.getTags() != null) {
                         existingSpot.setTags(smallSpot.getTags());
                     }
+                    if (smallSpot.getIsSpotType() != null) {
+                        existingSpot.setIsSpotType(smallSpot.getIsSpotType());
+                    }
+                    if (smallSpot.getIntensityLevel() != null) {
+                        existingSpot.setIntensityLevel(smallSpot.getIntensityLevel());
+                    }
+                    if (smallSpot.getQueueLevel() != null) {
+                        existingSpot.setQueueLevel(smallSpot.getQueueLevel());
+                    }
+                    if (smallSpot.getFamilyFriendlyScore() != null) {
+                        existingSpot.setFamilyFriendlyScore(smallSpot.getFamilyFriendlyScore());
+                    }
+                    if (smallSpot.getElderlyFriendlyScore() != null) {
+                        existingSpot.setElderlyFriendlyScore(smallSpot.getElderlyFriendlyScore());
+                    }
+                    if (smallSpot.getNatureScore() != null) {
+                        existingSpot.setNatureScore(smallSpot.getNatureScore());
+                    }
+                    if (smallSpot.getCultureScore() != null) {
+                        existingSpot.setCultureScore(smallSpot.getCultureScore());
+                    }
+                    if (smallSpot.getPhotographyScore() != null) {
+                        existingSpot.setPhotographyScore(smallSpot.getPhotographyScore());
+                    }
+                    if (smallSpot.getRestConvenienceScore() != null) {
+                        existingSpot.setRestConvenienceScore(smallSpot.getRestConvenienceScore());
+                    }
                     return ResponseEntity.ok(smallScenicSpotRepository.save(existingSpot));
                 })
                 .orElse(ResponseEntity.notFound().build());

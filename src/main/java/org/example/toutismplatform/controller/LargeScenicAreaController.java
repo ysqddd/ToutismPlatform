@@ -75,6 +75,42 @@ public class LargeScenicAreaController {
                     if (largeArea.getIsAreaType() != null) {
                         existingArea.setIsAreaType(largeArea.getIsAreaType());
                     }
+                    if (largeArea.getRecommendedVisitDuration() != null) {
+                        existingArea.setRecommendedVisitDuration(largeArea.getRecommendedVisitDuration());
+                    }
+                    if (largeArea.getIntensityLevel() != null) {
+                        existingArea.setIntensityLevel(largeArea.getIntensityLevel());
+                    }
+                    if (largeArea.getCrowdLevel() != null) {
+                        existingArea.setCrowdLevel(largeArea.getCrowdLevel());
+                    }
+                    if (largeArea.getFamilyFriendlyScore() != null) {
+                        existingArea.setFamilyFriendlyScore(largeArea.getFamilyFriendlyScore());
+                    }
+                    if (largeArea.getElderlyFriendlyScore() != null) {
+                        existingArea.setElderlyFriendlyScore(largeArea.getElderlyFriendlyScore());
+                    }
+                    if (largeArea.getNatureScore() != null) {
+                        existingArea.setNatureScore(largeArea.getNatureScore());
+                    }
+                    if (largeArea.getCultureScore() != null) {
+                        existingArea.setCultureScore(largeArea.getCultureScore());
+                    }
+                    if (largeArea.getPhotographyScore() != null) {
+                        existingArea.setPhotographyScore(largeArea.getPhotographyScore());
+                    }
+                    if (largeArea.getLeisureScore() != null) {
+                        existingArea.setLeisureScore(largeArea.getLeisureScore());
+                    }
+                    if (largeArea.getFoodConvenienceScore() != null) {
+                        existingArea.setFoodConvenienceScore(largeArea.getFoodConvenienceScore());
+                    }
+                    if (largeArea.getRestroomConvenienceScore() != null) {
+                        existingArea.setRestroomConvenienceScore(largeArea.getRestroomConvenienceScore());
+                    }
+                    if (largeArea.getPopularityScore() != null) {
+                        existingArea.setPopularityScore(largeArea.getPopularityScore());
+                    }
                     return ResponseEntity.ok(largeScenicAreaRepository.save(existingArea));
                 })
                 .orElse(ResponseEntity.notFound().build());

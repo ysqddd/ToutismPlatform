@@ -169,6 +169,77 @@
               是非景区地点（酒店、火车站、高速收费站等，不会在用户端景区列表显示）
             </label>
           </div>
+          
+          <div class="score-section">
+            <h4>基本信息</h4>
+            <div class="score-grid">
+              <div class="form-group">
+                <label>建议游览时长（分钟）</label>
+                <input type="number" v-model="areaFormData.recommendedVisitDuration" min="0" />
+              </div>
+              <div class="form-group">
+                <label>体力消耗等级（1低 2中 3高 4很高）</label>
+                <select v-model="areaFormData.intensityLevel">
+                  <option :value="1">1 - 低</option>
+                  <option :value="2">2 - 中</option>
+                  <option :value="3">3 - 高</option>
+                  <option :value="4">4 - 很高</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>拥挤程度（1很少 2较少 3较多 4很多）</label>
+                <select v-model="areaFormData.crowdLevel">
+                  <option :value="1">1 - 很少</option>
+                  <option :value="2">2 - 较少</option>
+                  <option :value="3">3 - 较多</option>
+                  <option :value="4">4 - 很多</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          <div class="score-section">
+            <h4>评分（0-5分）</h4>
+            <div class="score-grid">
+              <div class="form-group">
+                <label>亲子友好分</label>
+                <input type="number" v-model="areaFormData.familyFriendlyScore" step="0.1" min="0" max="5" />
+              </div>
+              <div class="form-group">
+                <label>老人友好分</label>
+                <input type="number" v-model="areaFormData.elderlyFriendlyScore" step="0.1" min="0" max="5" />
+              </div>
+              <div class="form-group">
+                <label>自然风光分</label>
+                <input type="number" v-model="areaFormData.natureScore" step="0.1" min="0" max="5" />
+              </div>
+              <div class="form-group">
+                <label>人文历史分</label>
+                <input type="number" v-model="areaFormData.cultureScore" step="0.1" min="0" max="5" />
+              </div>
+              <div class="form-group">
+                <label>拍照观景分</label>
+                <input type="number" v-model="areaFormData.photographyScore" step="0.1" min="0" max="5" />
+              </div>
+              <div class="form-group">
+                <label>休闲轻松分</label>
+                <input type="number" v-model="areaFormData.leisureScore" step="0.1" min="0" max="5" />
+              </div>
+              <div class="form-group">
+                <label>餐饮便利分</label>
+                <input type="number" v-model="areaFormData.foodConvenienceScore" step="0.1" min="0" max="5" />
+              </div>
+              <div class="form-group">
+                <label>卫生间便利分</label>
+                <input type="number" v-model="areaFormData.restroomConvenienceScore" step="0.1" min="0" max="5" />
+              </div>
+              <div class="form-group">
+                <label>热门程度</label>
+                <input type="number" v-model="areaFormData.popularityScore" step="0.1" min="0" max="5" />
+              </div>
+            </div>
+          </div>
+          
           <div class="modal-actions">
             <button type="button" class="cancel-btn" @click="closeAreaModal">取消</button>
             <button type="submit" class="save-btn">保存</button>
@@ -221,6 +292,61 @@
             <label>标签（逗号分隔）</label>
             <input type="text" v-model="spotFormData.tags" placeholder="例如：自然景观,历史文化,休闲娱乐" />
           </div>
+          
+          <div class="score-section">
+            <h4>基本信息</h4>
+            <div class="score-grid">
+              <div class="form-group">
+                <label>体力消耗等级（1低 2中 3高 4很高）</label>
+                <select v-model="spotFormData.intensityLevel">
+                  <option :value="1">1 - 低</option>
+                  <option :value="2">2 - 中</option>
+                  <option :value="3">3 - 高</option>
+                  <option :value="4">4 - 很高</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>排队程度（1低 2中 3高 4很高）</label>
+                <select v-model="spotFormData.queueLevel">
+                  <option :value="1">1 - 低</option>
+                  <option :value="2">2 - 中</option>
+                  <option :value="3">3 - 高</option>
+                  <option :value="4">4 - 很高</option>
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          <div class="score-section">
+            <h4>评分（0-5分）</h4>
+            <div class="score-grid">
+              <div class="form-group">
+                <label>亲子友好分</label>
+                <input type="number" v-model="spotFormData.familyFriendlyScore" step="0.1" min="0" max="5" />
+              </div>
+              <div class="form-group">
+                <label>老人友好分</label>
+                <input type="number" v-model="spotFormData.elderlyFriendlyScore" step="0.1" min="0" max="5" />
+              </div>
+              <div class="form-group">
+                <label>自然风光分</label>
+                <input type="number" v-model="spotFormData.natureScore" step="0.1" min="0" max="5" />
+              </div>
+              <div class="form-group">
+                <label>人文历史分</label>
+                <input type="number" v-model="spotFormData.cultureScore" step="0.1" min="0" max="5" />
+              </div>
+              <div class="form-group">
+                <label>拍照观景分</label>
+                <input type="number" v-model="spotFormData.photographyScore" step="0.1" min="0" max="5" />
+              </div>
+              <div class="form-group">
+                <label>休息便利分</label>
+                <input type="number" v-model="spotFormData.restConvenienceScore" step="0.1" min="0" max="5" />
+              </div>
+            </div>
+          </div>
+          
           <div class="modal-actions">
             <button type="button" class="cancel-btn" @click="closeSpotModal">取消</button>
             <button type="submit" class="save-btn">保存</button>
@@ -259,7 +385,19 @@ export default {
         openingHours: '',
         price: '',
         tags: '',
-        isAreaType: 0
+        isAreaType: 0,
+        recommendedVisitDuration: 120,
+        intensityLevel: 2,
+        crowdLevel: 2,
+        familyFriendlyScore: 0,
+        elderlyFriendlyScore: 0,
+        natureScore: 0,
+        cultureScore: 0,
+        photographyScore: 0,
+        leisureScore: 0,
+        foodConvenienceScore: 0,
+        restroomConvenienceScore: 0,
+        popularityScore: 0
       },
       spotFormData: {
         id: null,
@@ -269,7 +407,15 @@ export default {
         description: '',
         imageUrl: '',
         visitingDuration: 60,
-        tags: ''
+        tags: '',
+        intensityLevel: 2,
+        queueLevel: 1,
+        familyFriendlyScore: 0,
+        elderlyFriendlyScore: 0,
+        natureScore: 0,
+        cultureScore: 0,
+        photographyScore: 0,
+        restConvenienceScore: 0
       }
     }
   },
@@ -331,6 +477,18 @@ export default {
         price: area.price || '',
         tags: area.tags || '',
         isAreaType: area.isAreaType === 1 ? 1 : 0,
+        recommendedVisitDuration: area.recommendedVisitDuration || 120,
+        intensityLevel: area.intensityLevel || 2,
+        crowdLevel: area.crowdLevel || 2,
+        familyFriendlyScore: area.familyFriendlyScore || 0,
+        elderlyFriendlyScore: area.elderlyFriendlyScore || 0,
+        natureScore: area.natureScore || 0,
+        cultureScore: area.cultureScore || 0,
+        photographyScore: area.photographyScore || 0,
+        leisureScore: area.leisureScore || 0,
+        foodConvenienceScore: area.foodConvenienceScore || 0,
+        restroomConvenienceScore: area.restroomConvenienceScore || 0,
+        popularityScore: area.popularityScore || 0,
         imageFile: null
       }
       this.showEditAreaModal = true
@@ -408,6 +566,18 @@ export default {
         price: '',
         tags: '',
         isAreaType: 0,
+        recommendedVisitDuration: 120,
+        intensityLevel: 2,
+        crowdLevel: 2,
+        familyFriendlyScore: 0,
+        elderlyFriendlyScore: 0,
+        natureScore: 0,
+        cultureScore: 0,
+        photographyScore: 0,
+        leisureScore: 0,
+        foodConvenienceScore: 0,
+        restroomConvenienceScore: 0,
+        popularityScore: 0,
         imageFile: null
       }
     },
@@ -437,6 +607,14 @@ export default {
         imageUrl: spot.imageUrl || '',
         visitingDuration: spot.visitingDuration || 60,
         tags: spot.tags || '',
+        intensityLevel: spot.intensityLevel || 2,
+        queueLevel: spot.queueLevel || 1,
+        familyFriendlyScore: spot.familyFriendlyScore || 0,
+        elderlyFriendlyScore: spot.elderlyFriendlyScore || 0,
+        natureScore: spot.natureScore || 0,
+        cultureScore: spot.cultureScore || 0,
+        photographyScore: spot.photographyScore || 0,
+        restConvenienceScore: spot.restConvenienceScore || 0,
         imageFile: null
       }
       this.showEditSpotModal = true
@@ -497,6 +675,14 @@ export default {
         imageUrl: '',
         visitingDuration: 60,
         tags: '',
+        intensityLevel: 2,
+        queueLevel: 1,
+        familyFriendlyScore: 0,
+        elderlyFriendlyScore: 0,
+        natureScore: 0,
+        cultureScore: 0,
+        photographyScore: 0,
+        restConvenienceScore: 0,
         imageFile: null
       }
     },
@@ -775,5 +961,38 @@ export default {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
+}
+
+.score-section {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #e0e0e0;
+}
+
+.score-section h4 {
+  margin-bottom: 15px;
+  color: #333;
+  font-size: 14px;
+}
+
+.score-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+}
+
+.score-grid .form-group {
+  margin-bottom: 10px;
+}
+
+.score-grid .form-group label {
+  font-size: 12px;
+  color: #666;
+}
+
+.score-grid .form-group input,
+.score-grid .form-group select {
+  padding: 8px;
+  font-size: 13px;
 }
 </style>

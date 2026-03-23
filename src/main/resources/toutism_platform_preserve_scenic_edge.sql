@@ -46,7 +46,7 @@ CREATE TABLE `employee`  (
 -- Records of employee
 -- ----------------------------
 INSERT INTO `employee` VALUES (1, 'admin2', '$2a$10$Ar./7IEJYtWyZX.QpVcAkem5.NlpucW6t7RAGqcD67YUqh5m7qoA6', '系统管理员2', 'admin2@example.com', '13800138001', '管理部', '系统管理员', '正常', 1, '2026-03-14 08:12:48', '2026-03-14 08:12:48');
-INSERT INTO `employee` VALUES (2, 'admin', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZRGdjGj/n3ZDo93yzCXxP4SxQJ5Fm', 'xxx', 'ad23123@1231', '2532414132', 'xxxx', 'xx', 'ACTIVE', 1, '2026-03-15 01:39:19', '2026-03-15 01:39:19');
+INSERT INTO `employee` VALUES (2, 'admin', '$2a$10$Xv8KvyuP5oLMhAle4L9Tb.FTTfM2SYm8XEoIEbQGeOhfypVJ9sNf.', 'xxx', 'ad23123@1231', '2532414132', 'xxxx', 'xx', 'ACTIVE', 1, '2026-03-15 01:39:19', '2026-03-15 01:39:19');
 
 -- ----------------------------
 -- Table structure for large_scenic_area
@@ -59,20 +59,43 @@ CREATE TABLE `large_scenic_area`  (
   `location` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '地理位置',
   `image_url` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '大景区/地点图片 URL',
   `opening_hours` varchar(100) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '开放时间',
+  `recommended_visit_duration` int(0) NOT NULL DEFAULT 120 COMMENT '建议游览时长（分钟）',
   `price` decimal(10, 2) NOT NULL COMMENT '价格',
   `tags` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '标签（逗号分隔）',
   `is_area_type` int(0) NOT NULL DEFAULT 0 COMMENT '地点类型：0-景区，1-非景区地点（酒店、火车站、高速收费站等）',
+  `intensity_level` tinyint(0) NOT NULL DEFAULT 2 COMMENT '体力消耗等级：1低 2中 3高 4很高',
+  `crowd_level` tinyint(0) NOT NULL DEFAULT 2 COMMENT '拥挤程度：1很少 2较少 3较多 4很多',
+  `family_friendly_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '亲子友好分 0-5',
+  `elderly_friendly_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '老人友好分 0-5',
+  `nature_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '自然风光分 0-5',
+  `culture_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '人文历史分 0-5',
+  `photography_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '拍照观景分 0-5',
+  `leisure_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '休闲轻松分 0-5',
+  `food_convenience_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '餐饮便利分 0-5',
+  `restroom_convenience_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '卫生间便利分 0-5',
+  `popularity_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '热门程度 0-5',
   `created_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
   `updated_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
   PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_is_area_type`(`is_area_type`) USING BTREE
+  INDEX `idx_is_area_type`(`is_area_type`) USING BTREE,
+  INDEX `idx_large_area_name`(`name`) USING BTREE,
+  INDEX `idx_large_area_nature`(`nature_score`) USING BTREE,
+  INDEX `idx_large_area_culture`(`culture_score`) USING BTREE,
+  INDEX `idx_large_area_elderly`(`elderly_friendly_score`) USING BTREE
 ) ENGINE = InnoDB AUTO_INCREMENT = 5 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of large_scenic_area
 -- ----------------------------
-INSERT INTO `large_scenic_area` VALUES (1, '嵩阳景区', '嵩阳书院始建于北魏太和八年（公元484年），当时是佛教活动场所，名为嵩阳寺。隋唐年间成为道教活动场所，唐高宗和武则天曾两次以这里为行宫。北宋时期成为著名的教育场所，名儒范仲淹、程颐、程颢、司马光等人都曾在此讲学，司马光的历史巨著《资治通鉴》有一部分就是在书院完成的。这些名儒的讲学活动，不仅使嵩阳书院成为北宋四大书院之首，而且也使嵩阳书院成为宋代理学的发源地之一。', '景区东北方', '/images/4f377437-6347-4790-a609-069a64170bca_2-1499592162278.jpg', '8:00-20:00', 32.00, '人文风光', 0, '2026-03-16 04:50:54', '2026-03-16 05:46:59');
-INSERT INTO `large_scenic_area` VALUES (4, '书证沟景区', '树正沟为九寨沟主沟，是九寨沟秀丽风景的大门，在九寨沟呈“Y”字形分布的三条沟谷中处于下支]。共有各种湖泊（海子）40余个，约占九寨沟景区全部湖泊的40%，40多个湖泊，犹如40多面晶莹的宝镜，顺沟叠延五、六公里。水光潋滟，碧波荡漾，鸟雀鸣唱，芦苇摇曳。沟内主要景点包括盆景滩、芦苇海、火花海、卧龙海、树正群海、树正瀑布、老虎海、犀牛海、双龙海及诺日朗瀑布等 [4] [8] [12]。其中，火花海在2017年地震中堤坝崩塌，后经生态修复恢复了湖泊景观；树正群海由大小19块海子组成，森林、湖泊、小瀑布相错相连', '景区西北方', '/images/2dfd36d9-88cd-44f7-b8e8-e56bdb81c2df_R-C.jpg', '8:00-20:00', 43.00, '自然美景', 0, '2026-03-16 05:45:06', '2026-03-16 05:45:06');
+INSERT INTO `large_scenic_area`
+(`id`, `name`, `description`, `location`, `image_url`, `opening_hours`, `recommended_visit_duration`, `price`, `tags`, `is_area_type`,
+ `intensity_level`, `crowd_level`, `family_friendly_score`, `elderly_friendly_score`, `nature_score`, `culture_score`,
+ `photography_score`, `leisure_score`, `food_convenience_score`, `restroom_convenience_score`, `popularity_score`, `created_at`, `updated_at`)
+VALUES
+(1, '嵩阳景区', '嵩阳书院始建于北魏太和八年（公元484年），当时是佛教活动场所，名为嵩阳寺。隋唐年间成为道教活动场所，唐高宗和武则天曾两次以这里为行宫。北宋时期成为著名的教育场所，名儒范仲淹、程颐、程颢、司马光等人都曾在此讲学，司马光的历史巨著《资治通鉴》有一部分就是在书院完成的。这些名儒的讲学活动，不仅使嵩阳书院成为北宋四大书院之首，而且也使嵩阳书院成为宋代理学的发源地之一。', '景区东北方', '/images/4f377437-6347-4790-a609-069a64170bca_2-1499592162278.jpg', '8:00-20:00', 180, 32.00, '人文风光,书院,历史,拍照', 0, 2, 2, 3.80, 4.20, 2.20, 4.90, 4.30, 3.60, 3.20, 4.00, 4.50, '2026-03-16 04:50:54', '2026-03-16 05:46:59'),
+(2, '东大门', '景区公共大门，游客进入收费景区的常用入口，可换乘、问询和短暂停留。', '景区东入口', '/images/system/default-gate-east.jpg', '00:00-23:59', 20, 0.00, '公共大门,免费入口,换乘,问询', 1, 1, 2, 4.20, 4.50, 1.00, 1.00, 2.00, 4.00, 3.50, 4.60, 4.00, '2026-03-16 05:00:00', '2026-03-16 05:00:00'),
+(3, '游客中心', '游客中心提供咨询、购票、休息、餐饮和卫生间等配套服务，可作为中转点。', '景区中心服务区', '/images/system/default-visitor-center.jpg', '8:00-20:00', 30, 0.00, '游客中心,服务,餐饮,卫生间,休息', 1, 1, 3, 4.50, 4.70, 1.20, 1.20, 1.80, 4.80, 4.80, 5.00, 4.40, '2026-03-16 05:10:00', '2026-03-16 05:10:00'),
+(4, '书证沟景区', '树正沟为九寨沟主沟，是九寨沟秀丽风景的大门，在九寨沟呈“Y”字形分布的三条沟谷中处于下支。共有各种湖泊（海子）40余个，约占九寨沟景区全部湖泊的40%，40多个湖泊犹如40多面晶莹的宝镜，顺沟叠延五、六公里。', '景区西北方', '/images/2dfd36d9-88cd-44f7-b8e8-e56bdb81c2df_R-C.jpg', '8:00-20:00', 240, 43.00, '自然美景,湖泊,瀑布,观景,拍照', 0, 3, 2, 4.00, 3.50, 4.90, 2.00, 4.80, 4.10, 2.60, 3.20, 4.70, '2026-03-16 05:45:06', '2026-03-16 05:45:06');
 
 -- ----------------------------
 -- Table structure for non_login_employee
@@ -290,18 +313,33 @@ CREATE TABLE `scenic_area_edge`  (
   `from_area_id` bigint(0) NOT NULL,
   `to_area_id` bigint(0) NOT NULL,
   `updated_at` datetime(6) NOT NULL,
-  `description` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL,
-  PRIMARY KEY (`id`) USING BTREE
-) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci ROW_FORMAT = Dynamic;
+  `description` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
+  `cost_amount` decimal(10, 2) NOT NULL DEFAULT 0.00 COMMENT '该段路线额外花费',
+  `transport_mode` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'WALK' COMMENT 'WALK/ROAD/SHUTTLE/CABLEWAY',
+  `intensity_level` tinyint(0) NOT NULL DEFAULT 2 COMMENT '体力消耗等级：1低 2中 3高 4很高',
+  `scenic_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '沿途风景分 0-5',
+  `comfort_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '舒适度分 0-5',
+  `elderly_friendly_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '老人友好分 0-5',
+  PRIMARY KEY (`id`) USING BTREE,
+  UNIQUE INDEX `uk_scenic_area_edge_pair_mode`(`from_area_id`, `to_area_id`, `transport_mode`) USING BTREE,
+  INDEX `idx_scenic_area_edge_from`(`from_area_id`) USING BTREE,
+  INDEX `idx_scenic_area_edge_to`(`to_area_id`) USING BTREE,
+  CONSTRAINT `fk_scenic_area_edge_from_area` FOREIGN KEY (`from_area_id`) REFERENCES `large_scenic_area` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_scenic_area_edge_to_area` FOREIGN KEY (`to_area_id`) REFERENCES `large_scenic_area` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of scenic_area_edge
 -- ----------------------------
-INSERT INTO `scenic_area_edge` VALUES (1, '2026-03-16 05:53:31.000804', 2000.00, 16, 2, 1, '2026-03-16 05:53:31.000804', '公路');
-INSERT INTO `scenic_area_edge` VALUES (2, '2026-03-16 05:53:55.380334', 4000.00, 30, 2, 3, '2026-03-16 05:53:55.380334', '公路');
-INSERT INTO `scenic_area_edge` VALUES (3, '2026-03-16 05:54:18.309587', 1423.00, 19, 2, 4, '2026-03-16 05:54:18.309587', '盘山公路');
-INSERT INTO `scenic_area_edge` VALUES (4, '2026-03-16 05:55:14.054955', 3231.00, 30, 1, 4, '2026-03-16 05:55:14.054955', '公路');
-INSERT INTO `scenic_area_edge` VALUES (5, '2026-03-16 05:55:36.303502', 531.00, 10, 4, 3, '2026-03-16 05:55:36.303502', '索道');
+INSERT INTO `scenic_area_edge`
+(`id`, `created_at`, `distance`, `duration`, `from_area_id`, `to_area_id`, `updated_at`, `description`,
+ `cost_amount`, `transport_mode`, `intensity_level`, `scenic_score`, `comfort_score`, `elderly_friendly_score`)
+VALUES
+(1, '2026-03-16 05:53:31.000804', 2000.00, 16, 2, 1, '2026-03-16 05:53:31.000804', '公路', 0.00, 'ROAD', 2, 2.50, 3.80, 4.20),
+(2, '2026-03-16 05:53:55.380334', 4000.00, 30, 2, 3, '2026-03-16 05:53:55.380334', '公路', 0.00, 'ROAD', 1, 1.20, 4.50, 4.80),
+(3, '2026-03-16 05:54:18.309587', 1423.00, 19, 2, 4, '2026-03-16 05:54:18.309587', '盘山公路', 0.00, 'ROAD', 3, 4.50, 2.80, 2.60),
+(4, '2026-03-16 05:55:14.054955', 3231.00, 30, 1, 4, '2026-03-16 05:55:14.054955', '公路', 0.00, 'ROAD', 2, 3.80, 3.50, 3.20),
+(5, '2026-03-16 05:55:36.303502', 531.00, 10, 4, 3, '2026-03-16 05:55:36.303502', '索道', 20.00, 'CABLEWAY', 1, 4.90, 4.80, 4.50);
 
 -- ----------------------------
 -- Table structure for scenic_edge
@@ -321,11 +359,20 @@ CREATE TABLE `scenic_edge`  (
   INDEX `idx_end_area_id`(`end_area_id`) USING BTREE,
   CONSTRAINT `fk_edge_end_area` FOREIGN KEY (`end_area_id`) REFERENCES `large_scenic_area` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_edge_start_area` FOREIGN KEY (`start_area_id`) REFERENCES `large_scenic_area` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of scenic_edge
 -- ----------------------------
+INSERT INTO `scenic_edge`
+(`id`, `start_area_id`, `end_area_id`, `distance`, `time_cost`, `path_description`, `created_at`, `updated_at`)
+VALUES
+(1, 2, 1, 2000.00, 16, '公路', '2026-03-16 05:53:31', '2026-03-16 05:53:31'),
+(2, 2, 3, 4000.00, 30, '公路', '2026-03-16 05:53:55', '2026-03-16 05:53:55'),
+(3, 2, 4, 1423.00, 19, '盘山公路', '2026-03-16 05:54:18', '2026-03-16 05:54:18'),
+(4, 1, 4, 3231.00, 30, '公路', '2026-03-16 05:55:14', '2026-03-16 05:55:14'),
+(5, 4, 3, 531.00, 10, '索道', '2026-03-16 05:55:36', '2026-03-16 05:55:36');
+
 
 -- ----------------------------
 -- Table structure for shopping_cart
@@ -367,17 +414,36 @@ CREATE TABLE `small_scenic_spot`  (
   `image_url` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '小景区/点位图片 URL',
   `visiting_duration` int(0) NULL DEFAULT 60 COMMENT '建议游览时长（分钟）',
   `tags` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '标签（逗号分隔）',
+  `intensity_level` tinyint(0) NOT NULL DEFAULT 2 COMMENT '体力消耗等级：1低 2中 3高 4很高',
+  `queue_level` tinyint(0) NOT NULL DEFAULT 1 COMMENT '排队程度：1低 2中 3高 4很高',
+  `family_friendly_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '亲子友好分 0-5',
+  `elderly_friendly_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '老人友好分 0-5',
+  `nature_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '自然风光分 0-5',
+  `culture_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '人文历史分 0-5',
+  `photography_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '拍照观景分 0-5',
+  `rest_convenience_score` decimal(4, 2) NOT NULL DEFAULT 0.00 COMMENT '休息便利分 0-5',
   `created_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
   `updated_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
   PRIMARY KEY (`id`) USING BTREE,
   INDEX `idx_large_area_id`(`large_area_id`) USING BTREE,
   INDEX `idx_is_spot_type`(`is_spot_type`) USING BTREE,
   CONSTRAINT `fk_small_spot_large_area` FOREIGN KEY (`large_area_id`) REFERENCES `large_scenic_area` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+) ENGINE = InnoDB AUTO_INCREMENT = 7 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of small_scenic_spot
 -- ----------------------------
+INSERT INTO `small_scenic_spot`
+(`id`, `large_area_id`, `name`, `is_spot_type`, `description`, `image_url`, `visiting_duration`, `tags`,
+ `intensity_level`, `queue_level`, `family_friendly_score`, `elderly_friendly_score`, `nature_score`,
+ `culture_score`, `photography_score`, `rest_convenience_score`, `created_at`, `updated_at`)
+VALUES
+(1, 1, '嵩阳书院', 0, '适合人文参观与历史学习，是嵩阳景区核心游览点。', '/images/system/songyang-academy.jpg', 90, '书院,历史,文化,拍照', 1, 2, 3.60, 4.50, 1.50, 5.00, 4.20, 3.80, '2026-03-16 06:00:00', '2026-03-16 06:00:00'),
+(2, 1, '将军柏', 0, '古树景观点，步行压力小，适合轻松游览。', '/images/system/general-cypress.jpg', 30, '古树,拍照,轻松', 1, 1, 3.50, 4.60, 2.50, 3.50, 4.00, 3.60, '2026-03-16 06:01:00', '2026-03-16 06:01:00'),
+(3, 2, '东大门检票口', 1, '公共大门检票与问询区域，免费通行。', '/images/system/east-gate-check.jpg', 10, '入口,免费,问询', 1, 2, 4.00, 4.50, 0.50, 0.50, 1.00, 4.20, '2026-03-16 06:02:00', '2026-03-16 06:02:00'),
+(4, 3, '游客中心休息区', 1, '游客中心休息区，可就餐和短暂停留。', '/images/system/visitor-rest.jpg', 20, '休息,餐饮,卫生间', 1, 1, 4.80, 4.90, 0.50, 0.50, 1.00, 5.00, '2026-03-16 06:03:00', '2026-03-16 06:03:00'),
+(5, 4, '树正瀑布', 0, '自然景观代表点，适合拍照打卡。', '/images/system/shuzheng-waterfall.jpg', 50, '瀑布,自然,拍照', 2, 2, 4.20, 3.40, 4.90, 1.20, 4.90, 3.20, '2026-03-16 06:04:00', '2026-03-16 06:04:00'),
+(6, 4, '火花海', 0, '观景和摄影体验较强，自然风光突出。', '/images/system/spark-lake.jpg', 60, '湖泊,观景,摄影', 2, 2, 4.10, 3.30, 5.00, 1.00, 5.00, 3.10, '2026-03-16 06:05:00', '2026-03-16 06:05:00');
 
 -- ----------------------------
 -- Table structure for users
@@ -401,5 +467,32 @@ CREATE TABLE `users`  (
 INSERT INTO `users` VALUES (1, 'admin', '$2a$10$4e3C03374E1D4F8C8B7A2B3C4D5E6F7G8H9I0J1K2L3M4N5O6P7Q8R9S0T', 'admin@example.com', 'ADMIN', 1);
 INSERT INTO `users` VALUES (3, 'zhangsan', '$2a$10$LvRbbJ64AmnN6PbiudVpTeZbdbyVvfj2vH8vottTVP2Kz1/.kBekK', '123132412946@qq.com', 'USER', 0);
 INSERT INTO `users` VALUES (4, 'shi', '$2a$10$IBx7GfzuRxT25cD/qKxpoehFnlj0/KGQNeevGs/hnYOMT4i/ckpmy', '12312312@qq.com', 'USER', 0);
+
+-- ----------------------------
+-- Table structure for route_plan_record
+-- ----------------------------
+DROP TABLE IF EXISTS `route_plan_record`;
+CREATE TABLE `route_plan_record`  (
+  `id` bigint(0) NOT NULL AUTO_INCREMENT,
+  `user_id` bigint(0) NULL DEFAULT NULL COMMENT '用户ID，可为空（游客模式）',
+  `start_area_id` bigint(0) NULL DEFAULT NULL COMMENT '起点ID',
+  `end_area_id` bigint(0) NULL DEFAULT NULL COMMENT '终点ID',
+  `original_query` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL COMMENT '用户原始提问',
+  `extracted_preferences_json` json NULL COMMENT 'AI从问句中抽取出的偏好权重JSON',
+  `candidate_area_ids_json` json NULL COMMENT '候选地点ID列表JSON',
+  `route_result_json` json NULL COMMENT '最终路线结果JSON',
+  `created_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
+  PRIMARY KEY (`id`) USING BTREE,
+  INDEX `idx_route_plan_user_id`(`user_id`) USING BTREE,
+  INDEX `idx_route_plan_start_area_id`(`start_area_id`) USING BTREE,
+  INDEX `idx_route_plan_end_area_id`(`end_area_id`) USING BTREE,
+  CONSTRAINT `fk_route_plan_user` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_route_plan_start_area` FOREIGN KEY (`start_area_id`) REFERENCES `large_scenic_area` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
+  CONSTRAINT `fk_route_plan_end_area` FOREIGN KEY (`end_area_id`) REFERENCES `large_scenic_area` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+
+-- ----------------------------
+-- Records of route_plan_record
+-- ----------------------------
 
 SET FOREIGN_KEY_CHECKS = 1;
