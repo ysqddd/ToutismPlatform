@@ -46,27 +46,11 @@ public class UserController {
                     if (user.getPassword() != null) {
                         existingUser.setPassword(passwordEncoder.encode(user.getPassword()));
                     }
-                    if (user.getRole() != null) {
-                        existingUser.setRole(user.getRole());
-                    }
-                    existingUser.setIsAdmin(user.getIsAdmin());
                     return ResponseEntity.ok(userRepository.save(existingUser));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
     
-    // 更新用户权限级别（仅超级管理员）
-    @PutMapping("/{id}/admin-level")
-    public ResponseEntity<User> updateAdminLevel(@PathVariable Long id, @RequestParam int adminLevel) {
-        return userRepository.findById(id)
-                .map(existingUser -> {
-                    existingUser.setIsAdmin(adminLevel);
-                    return ResponseEntity.ok(userRepository.save(existingUser));
-                })
-                .orElse(ResponseEntity.notFound().build());
-    }
-    
-    // 删除用户（仅管理员）
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteUser(@PathVariable Long id) {
         if (!userRepository.existsById(id)) {

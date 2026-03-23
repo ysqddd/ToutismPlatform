@@ -66,10 +66,6 @@ public class AuthController {
                 return ResponseEntity.badRequest().body("邮箱已被注册，请更换其他邮箱");
             }
             
-            // 确保 isAdmin 为 0（普通用户）
-            user.setIsAdmin(0);
-            user.setRole("USER");
-            
             // 加密密码
             String encodedPassword = passwordEncoder.encode(user.getPassword());
             user.setPassword(encodedPassword);
@@ -105,22 +101,23 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody User user) {
         try {
-            System.out.println("=== 登录请求 ===");
+            System.out.println("=== 用户登录请求 ===");
             System.out.println("用户名：" + user.getUsername());
             
-            // 检查用户是否存在
+            if (employeeRepository.existsByUsername(user.getUsername())) {
+                System.err.println("该账号是管理员账号，请使用管理员登录入口");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("该账号是管理员账号，请使用管理员登录入口");
+            }
+            
             if (!userRepository.existsByUsername(user.getUsername())) {
                 System.err.println("用户不存在：" + user.getUsername());
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("用户不存在：" + user.getUsername());
             }
             
-            // 获取用户详情
             User existingUser = userRepository.findByUsername(user.getUsername()).get();
             System.out.println("数据库中的用户信息:");
             System.out.println("  - username: " + existingUser.getUsername());
             System.out.println("  - password: " + existingUser.getPassword());
-            System.out.println("  - role: " + existingUser.getRole());
-            System.out.println("  - isAdmin: " + existingUser.getIsAdmin());
             System.out.println("输入的密码：" + user.getPassword());
             
             Authentication authentication = authenticationManager.authenticate(
@@ -135,6 +132,7 @@ public class AuthController {
             Map<String, Object> response = new HashMap<>();
             response.put("token", token);
             response.put("username", user.getUsername());
+            response.put("isUser", true);
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {
@@ -154,34 +152,32 @@ public class AuthController {
             String password = loginRequest.get("password");
             System.out.println("用户名：" + username);
             
-            // 检查员工是否存在
+            if (userRepository.existsByUsername(username)) {
+                System.err.println("该账号是普通用户账号，请使用用户登录入口");
+                return ResponseEntity.status(HttpStatus.FORBIDDEN).body("该账号是普通用户账号，请使用用户登录入口");
+            }
+            
             if (!employeeRepository.existsByUsername(username)) {
                 System.err.println("管理员不存在：" + username);
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("管理员不存在：" + username);
             }
             
-            // 获取员工详情
             Employee existingEmployee = employeeRepository.findByUsername(username).get();
             System.out.println("数据库中的管理员信息:");
             System.out.println("  - username: " + existingEmployee.getUsername());
             System.out.println("  - role: " + existingEmployee.getRole().getName());
             
-            // 检查是否为管理员角色
             String roleName = existingEmployee.getRole().getName();
             if (!roleName.equals("系统管理员") && !roleName.equals("用户管理员") && !roleName.equals("员工管理员") && !roleName.equals("商品管理员") && !roleName.equals("景区管理员")) {
                 System.err.println("用户不是管理员：" + username);
                 return ResponseEntity.status(HttpStatus.FORBIDDEN).body("该用户不是管理员，无权访问管理后台");
             }
             
-            // 验证密码
             boolean passwordMatches = false;
             try {
-                // 尝试使用BCrypt验证
                 passwordMatches = passwordEncoder.matches(password, existingEmployee.getPassword());
             } catch (Exception e) {
-                // 如果密码不是BCrypt格式，使用明文验证
                 passwordMatches = password.equals(existingEmployee.getPassword());
-                // 如果明文验证成功，更新密码为BCrypt格式
                 if (passwordMatches) {
                     existingEmployee.setPassword(passwordEncoder.encode(password));
                     employeeRepository.save(existingEmployee);
@@ -194,7 +190,6 @@ public class AuthController {
                 return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("管理员用户名或密码错误");
             }
             
-            // 认证成功
             System.out.println("管理员登录认证成功");
             
             Authentication authentication = new UsernamePasswordAuthenticationToken(
@@ -239,7 +234,6 @@ public class AuthController {
             response.put("id", user.getId());
             response.put("username", user.getUsername());
             response.put("email", user.getEmail());
-            response.put("role", user.getRole());
             
             return ResponseEntity.ok(response);
         } catch (Exception e) {

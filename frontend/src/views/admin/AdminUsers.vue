@@ -18,8 +18,6 @@
               <th>ID</th>
               <th>用户名</th>
               <th>邮箱</th>
-              <th>角色</th>
-              <th>是否管理员</th>
               <th>操作</th>
             </tr>
           </thead>
@@ -28,14 +26,6 @@
               <td>{{ user.id }}</td>
               <td>{{ user.username }}</td>
               <td>{{ user.email }}</td>
-              <td>
-                <span :class="['role-tag', user.role]">{{ user.role }}</span>
-              </td>
-              <td>
-                <span :class="['status-badge', user.admin ? 'active' : 'inactive']">
-                  {{ user.admin ? '是' : '否' }}
-                </span>
-              </td>
               <td>
                 <div class="action-buttons">
                   <button class="edit-btn" @click="editUser(user)">✏️</button>
@@ -65,20 +55,6 @@
             <label>邮箱</label>
             <input type="email" v-model="formData.email" required />
           </div>
-          <div class="form-group">
-            <label>角色</label>
-            <select v-model="formData.role">
-              <option value="USER">普通用户</option>
-              <option value="ADMIN">管理员</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>是否管理员</label>
-            <select v-model="formData.admin">
-              <option :value="false">否</option>
-              <option :value="true">是</option>
-            </select>
-          </div>
           <div class="modal-actions">
             <button type="button" class="cancel-btn" @click="closeModal">取消</button>
             <button type="submit" class="save-btn">保存</button>
@@ -107,9 +83,7 @@ export default {
         id: null,
         username: '',
         password: '',
-        email: '',
-        role: 'USER',
-        admin: false
+        email: ''
       }
     }
   },
@@ -131,9 +105,7 @@ export default {
         id: user.id,
         username: user.username,
         password: '',
-        email: user.email,
-        role: user.role,
-        admin: user.admin
+        email: user.email
       }
       this.showEditModal = true
     },
@@ -172,9 +144,7 @@ export default {
         id: null,
         username: '',
         password: '',
-        email: '',
-        role: 'USER',
-        admin: false
+        email: ''
       }
     }
   }
@@ -259,32 +229,6 @@ export default {
 .data-table td {
   padding: 15px;
   border-bottom: 1px solid #e9ecef;
-}
-
-.role-tag {
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  background: #e3f2fd;
-  color: #2196f3;
-}
-
-.role-tag.ADMIN {
-  background: #f3e5f5;
-  color: #9c27b0;
-}
-
-.status-badge {
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  background: #ffebee;
-  color: #f44336;
-}
-
-.status-badge.active {
-  background: #e8f5e9;
-  color: #4caf50;
 }
 
 .action-buttons {

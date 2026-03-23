@@ -143,18 +143,33 @@ router.beforeEach((to, from, next) => {
   const token = localStorage.getItem('token')
   const adminToken = localStorage.getItem('adminToken')
   
-  // 检查token是否有效
   const isTokenValid = token && token.length > 0
   const isAdminTokenValid = adminToken && adminToken.length > 0
   
-  if (requiresAdmin && !isAdminTokenValid) {
-    // 清除无效的管理员token
-    localStorage.clear()
-    next('/admin/login')
-  } else if (requiresAuth && !isTokenValid) {
-    // 清除无效的用户token
-    localStorage.clear()
-    next('/login')
+  if (requiresAdmin) {
+    if (isAdminTokenValid) {
+      next()
+    } else if (isTokenValid) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('username')
+      localStorage.removeItem('userId')
+      next('/login')
+    } else {
+      localStorage.clear()
+      next('/admin/login')
+    }
+  } else if (requiresAuth) {
+    if (isTokenValid) {
+      next()
+    } else if (isAdminTokenValid) {
+      localStorage.removeItem('adminToken')
+      localStorage.removeItem('adminUsername')
+      localStorage.removeItem('isAdmin')
+      next('/admin/login')
+    } else {
+      localStorage.clear()
+      next('/login')
+    }
   } else {
     next()
   }

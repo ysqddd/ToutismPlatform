@@ -31,16 +31,10 @@ public class UserDetailsServiceImpl implements UserDetailsService {
             User user = userOptional.get();
             List<GrantedAuthority> authorities = new ArrayList<>();
             
-            // 根据 isAdmin 字段添加权限
-            if (user.getIsAdmin() > 0) {
-                authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
-            } else {
-                authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
-            }
+            authorities.add(new SimpleGrantedAuthority("ROLE_USER"));
             
             System.out.println("=== UserDetailsServiceImpl ===");
             System.out.println("加载用户：" + user.getUsername());
-            System.out.println("isAdmin: " + user.getIsAdmin());
             System.out.println("权限列表：" + authorities);
             
             return new org.springframework.security.core.userdetails.User(
