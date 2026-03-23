@@ -4,7 +4,8 @@
     
     <div class="admin-content">
       <div class="page-header">
-        <h1>路径管理</h1>
+        <h1>景区间路径管理</h1>
+        <p class="page-desc">管理大景区之间的路径连接</p>
       </div>
       
       <div class="action-bar">
@@ -218,6 +219,12 @@ export default {
   color: #333;
   font-size: 24px;
   margin: 0;
+}
+
+.page-desc {
+  color: #666;
+  font-size: 14px;
+  margin-top: 8px;
 }
 
 .action-bar {

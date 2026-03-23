@@ -9,6 +9,7 @@ import AdminUsers from './views/admin/AdminUsers.vue'
 import AdminPermissions from './views/admin/AdminPermissions.vue'
 import AdminEmployees from './views/admin/AdminEmployees.vue'
 import AdminPathManagement from './views/admin/AdminPathManagement.vue'
+import AdminScenicEdgeManagement from './views/admin/AdminScenicEdgeManagement.vue'
 
 const routes = [
   {
@@ -120,6 +121,12 @@ const routes = [
     path: '/admin/path-management',
     name: 'AdminPathManagement',
     component: AdminPathManagement,
+    meta: { requiresAdmin: true }
+  },
+  {
+    path: '/admin/scenic-edge-management',
+    name: 'AdminScenicEdgeManagement',
+    component: AdminScenicEdgeManagement,
     meta: { requiresAdmin: true }
   }
 ]

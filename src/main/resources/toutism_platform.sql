@@ -11,7 +11,7 @@
  Target Server Version : 80034
  File Encoding         : 65001
 
- Date: 23/03/2026 10:27:27
+ Date: 23/03/2026 12:14:52
 */
 
 SET NAMES utf8mb4;
@@ -327,21 +327,16 @@ CREATE TABLE `route_plan_record`  (
 DROP TABLE IF EXISTS `scenic_area_edge`;
 CREATE TABLE `scenic_area_edge`  (
   `id` bigint(0) NOT NULL AUTO_INCREMENT,
-  `created_at` datetime(6) NOT NULL,
   `distance` decimal(10, 2) NOT NULL,
   `duration` int(0) NOT NULL,
   `from_area_id` bigint(0) NOT NULL,
   `to_area_id` bigint(0) NOT NULL,
+  `created_at` datetime(6) NOT NULL,
   `updated_at` datetime(6) NOT NULL,
   `description` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL,
   `cost_amount` decimal(10, 2) NOT NULL COMMENT '该段路线额外花费',
-  `transport_mode` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'WALK' COMMENT 'WALK/ROAD/SHUTTLE/CABLEWAY',
-  `intensity_level` int(0) NOT NULL,
-  `scenic_score` decimal(4, 2) NOT NULL COMMENT '沿途风景分 0-5',
-  `comfort_score` decimal(4, 2) NOT NULL COMMENT '舒适度分 0-5',
-  `elderly_friendly_score` decimal(4, 2) NOT NULL COMMENT '老人友好分 0-5',
   PRIMARY KEY (`id`) USING BTREE,
-  UNIQUE INDEX `uk_scenic_area_edge_pair_mode`(`from_area_id`, `to_area_id`, `transport_mode`) USING BTREE,
+  UNIQUE INDEX `uk_scenic_area_edge_pair_mode`(`from_area_id`, `to_area_id`) USING BTREE,
   INDEX `idx_scenic_area_edge_from`(`from_area_id`) USING BTREE,
   INDEX `idx_scenic_area_edge_to`(`to_area_id`) USING BTREE,
   CONSTRAINT `fk_scenic_area_edge_from_area` FOREIGN KEY (`from_area_id`) REFERENCES `large_scenic_area` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
@@ -351,7 +346,7 @@ CREATE TABLE `scenic_area_edge`  (
 -- ----------------------------
 -- Records of scenic_area_edge
 -- ----------------------------
-INSERT INTO `scenic_area_edge` VALUES (4, '2026-03-16 05:55:14.054955', 3231.00, 30, 1, 4, '2026-03-16 05:55:14.054955', '公路', 0.00, 'ROAD', 2, 3.80, 3.50, 3.20);
+INSERT INTO `scenic_area_edge` VALUES (4, 3231.00, 30, 1, 4, '2026-03-16 05:55:14.054955', '2026-03-16 05:55:14.054955', '公路', 0.00);
 
 -- ----------------------------
 -- Table structure for scenic_edge
@@ -359,24 +354,32 @@ INSERT INTO `scenic_area_edge` VALUES (4, '2026-03-16 05:55:14.054955', 3231.00,
 DROP TABLE IF EXISTS `scenic_edge`;
 CREATE TABLE `scenic_edge`  (
   `id` bigint(0) NOT NULL AUTO_INCREMENT,
-  `start_area_id` bigint(0) NOT NULL COMMENT '起始大景区 ID',
-  `end_area_id` bigint(0) NOT NULL COMMENT '结束大景区 ID',
+  `large_area_id` bigint(0) NOT NULL COMMENT '所属大景区 ID',
+  `start_spot_id` bigint(0) NOT NULL COMMENT '起始小景点 ID',
+  `end_spot_id` bigint(0) NOT NULL COMMENT '结束小景点 ID',
   `distance` double NOT NULL COMMENT '距离（米）',
   `time_cost` int(0) NOT NULL COMMENT '时间成本（分钟）',
   `path_description` varchar(500) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NULL DEFAULT NULL COMMENT '路径描述',
+  `transport_mode` varchar(50) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'WALK' COMMENT '交通方式: WALK/SHUTTLE/CABLEWAY',
+  `intensity_level` int(0) NOT NULL DEFAULT 2 COMMENT '强度等级 1-5',
+  `scenic_score` decimal(4, 2) NOT NULL COMMENT '沿途风景分 0-5',
+  `comfort_score` decimal(4, 2) NOT NULL COMMENT '舒适度分 0-5',
+  `elderly_friendly_score` decimal(4, 2) NOT NULL COMMENT '老人友好分 0-5',
   `created_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0),
   `updated_at` datetime(0) NOT NULL DEFAULT CURRENT_TIMESTAMP(0) ON UPDATE CURRENT_TIMESTAMP(0),
   PRIMARY KEY (`id`) USING BTREE,
-  INDEX `idx_start_area_id`(`start_area_id`) USING BTREE,
-  INDEX `idx_end_area_id`(`end_area_id`) USING BTREE,
-  CONSTRAINT `fk_edge_end_area` FOREIGN KEY (`end_area_id`) REFERENCES `large_scenic_area` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  CONSTRAINT `fk_edge_start_area` FOREIGN KEY (`start_area_id`) REFERENCES `large_scenic_area` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
-) ENGINE = InnoDB AUTO_INCREMENT = 6 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
+  UNIQUE INDEX `uk_spot_pair_mode`(`start_spot_id`, `end_spot_id`, `transport_mode`) USING BTREE,
+  INDEX `idx_large_area_id`(`large_area_id`) USING BTREE,
+  INDEX `idx_start_spot_id`(`start_spot_id`) USING BTREE,
+  INDEX `idx_end_spot_id`(`end_spot_id`) USING BTREE,
+  CONSTRAINT `fk_edge_end_spot` FOREIGN KEY (`end_spot_id`) REFERENCES `small_scenic_spot` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_edge_large_area` FOREIGN KEY (`large_area_id`) REFERENCES `large_scenic_area` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  CONSTRAINT `fk_edge_start_spot` FOREIGN KEY (`start_spot_id`) REFERENCES `small_scenic_spot` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE = InnoDB AUTO_INCREMENT = 1 CHARACTER SET = utf8mb4 COLLATE = utf8mb4_unicode_ci ROW_FORMAT = Dynamic;
 
 -- ----------------------------
 -- Records of scenic_edge
 -- ----------------------------
-INSERT INTO `scenic_edge` VALUES (4, 1, 4, 3231, 30, '公路', '2026-03-16 05:55:14', '2026-03-16 05:55:14');
 
 -- ----------------------------
 -- Table structure for shopping_cart

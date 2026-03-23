@@ -38,7 +38,11 @@
           </div>
           <div class="dropdown-item" @click="navigateTo('/admin/path-management')">
             <span class="icon">🗺️</span>
-            <span class="text">路径管理</span>
+            <span class="text">景区间路径</span>
+          </div>
+          <div class="dropdown-item" @click="navigateTo('/admin/scenic-edge-management')">
+            <span class="icon">🛤️</span>
+            <span class="text">景区内路径</span>
           </div>
         </div>
       </li>
