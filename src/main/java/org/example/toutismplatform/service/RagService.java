@@ -125,7 +125,7 @@ public class RagService {
         String endName = locations.get("end");
 
         if (startName == null || endName == null) {
-            return "请明确告诉我起点和终点，例如：从东大门到书证沟景区，想少走路、适合老人。";
+            return "请明确告诉我起点和终点，例如：从火车站到书证沟景区，想少走路、适合老人。";
         }
 
         LargeScenicArea startArea = findAreaByName(startName, allAreas);

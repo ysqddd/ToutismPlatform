@@ -35,6 +35,15 @@ public class SmallScenicSpotController {
             map.put("visitingDuration", spot.getVisitingDuration());
             map.put("tags", spot.getTags());
             map.put("largeAreaId", spot.getLargeAreaId());
+            map.put("isSpotType", spot.getIsSpotType());
+            map.put("intensityLevel", spot.getIntensityLevel());
+            map.put("queueLevel", spot.getQueueLevel());
+            map.put("familyFriendlyScore", spot.getFamilyFriendlyScore());
+            map.put("elderlyFriendlyScore", spot.getElderlyFriendlyScore());
+            map.put("natureScore", spot.getNatureScore());
+            map.put("cultureScore", spot.getCultureScore());
+            map.put("photographyScore", spot.getPhotographyScore());
+            map.put("restConvenienceScore", spot.getRestConvenienceScore());
             
             // 获取所属景区名称
             if (spot.getLargeAreaId() != null) {

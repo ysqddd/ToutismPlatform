@@ -20,14 +20,14 @@ public class PathService {
     private ScenicAreaEdgeRepository scenicAreaEdgeRepository;
 
     /**
-     * 兼容原有调用：仅按距离或时间计算最短路径
+     按距离或时间计算最短路径
      */
     public Map<String, Object> calculateShortestPath(Long startAreaId, Long endAreaId, String weightType) {
         return calculateClassicPath(startAreaId, endAreaId, weightType);
     }
 
     /**
-     * 新增：根据用户在自然语言里表达的偏好进行综合加权路径规划
+     根据用户在自然语言里表达的偏好进行综合加权路径规划
      */
     public Map<String, Object> calculatePersonalizedPath(Long startAreaId,
                                                          Long endAreaId,
