@@ -39,7 +39,7 @@ public class RagService {
         }
 
         if (isPathPlanningQuery(query)) {
-            return handlePathPlanningQuery(query);
+            return sanitizeAiAnswer(handlePathPlanningQuery(query));
         }
 
         List<LargeScenicArea> largeAreas = largeScenicAreaRepository.findAll();
@@ -106,9 +106,14 @@ public class RagService {
                 "2. 如涉及公共大门、车站、夜市等节点，要说明它们可作为路线起终点或补给点\n" +
                 "3. 不要提及编程、数据库、接口等实现细节\n" +
                 "4. 若用户给出偏好，如少走路、亲子、拍照、人文、赶时间，要显式体现在建议中\n" +
-                "5. 优先结合景区标签、适合人群、游览体验和路线顺序给出建议";
+                "5. 优先结合景区标签、适合人群、游览体验和路线顺序给出建议\n" +
+                "6. 只用纯文本回答，不要使用 Markdown 格式\n" +
+                "7. 不要出现 #、*、-、>、`、--- 等符号\n" +
+                "8. 不要写 Markdown 标题，不要写项目符号列表\n" +
+                "9. 直接用自然段输出，分段时不要加任何特殊符号";
 
-        return ollamaChatModel.generate(enhancedQuery);
+        String rawAnswer = ollamaChatModel.generate(enhancedQuery);
+        return sanitizeAiAnswer(rawAnswer);
     }
 
     private boolean isPathPlanningQuery(String query) {
@@ -642,6 +647,24 @@ public class RagService {
             }
         }
         return false;
+    }
+
+    private String sanitizeAiAnswer(String text) {
+        if (text == null || text.isBlank()) {
+            return "抱歉，暂时没有生成合适的回答，请稍后再试。";
+        }
+
+        String cleaned = text;
+        cleaned = cleaned.replaceAll("(?m)^\s*#{1,6}\s*", "");
+        cleaned = cleaned.replaceAll("(?m)^\s*[-*+]\s+", "");
+        cleaned = cleaned.replaceAll("(?m)^\s*>\s*", "");
+        cleaned = cleaned.replaceAll("(?m)^\s*-{3,}\s*$", "");
+        cleaned = cleaned.replace("**", "");
+        cleaned = cleaned.replace("*", "");
+        cleaned = cleaned.replace("```", "");
+        cleaned = cleaned.replace("`", "");
+        cleaned = cleaned.replaceAll("\n{3,}", "\n\n");
+        return cleaned.trim();
     }
 
 
