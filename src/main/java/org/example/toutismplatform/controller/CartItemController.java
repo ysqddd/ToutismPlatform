@@ -107,7 +107,17 @@ public class CartItemController {
     
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> removeFromCart(@RequestParam Long userId, @PathVariable Long id) {
-        cartItemRepository.deleteByUserIdAndId(userId, id);
+        Optional<CartItem> cartItemOpt = cartItemRepository.findById(id);
+        if (!cartItemOpt.isPresent()) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        CartItem cartItem = cartItemOpt.get();
+        if (!cartItem.getUserId().equals(userId)) {
+            return ResponseEntity.status(403).build();
+        }
+        
+        cartItemRepository.deleteById(id);
         return ResponseEntity.ok().build();
     }
     

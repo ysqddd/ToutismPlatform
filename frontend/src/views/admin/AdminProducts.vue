@@ -31,7 +31,7 @@
               <td>{{ product.description || '-' }}</td>
               <td>¥{{ product.price }}</td>
               <td>
-                <img v-if="product.imageUrl" :src="product.imageUrl" :alt="product.name" style="width: 50px; height: 50px; object-fit: cover;" />
+                <img v-if="product.imageUrl" :src="getImageUrl(product.imageUrl)" :alt="product.name" style="width: 50px; height: 50px; object-fit: cover;" />
                 <span v-else>-</span>
               </td>
               <td>
@@ -89,7 +89,7 @@
             <label>选择图片</label>
             <input type="file" accept="image/*" @change="handleImageUpload" />
             <div v-if="formData.imageUrl" class="image-preview">
-              <img :src="formData.imageUrl" alt="预览图片" style="max-width: 200px; max-height: 150px;" />
+              <img :src="getImageUrl(formData.imageUrl)" alt="预览图片" style="max-width: 200px; max-height: 150px;" />
               <button type="button" class="remove-image" @click="removeImage">移除</button>
             </div>
           </div>
@@ -142,6 +142,13 @@ export default {
     this.loadAvailableAreas()
   },
   methods: {
+    getImageUrl(imageUrl) {
+      if (!imageUrl) return ''
+      if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://') || imageUrl.startsWith('data:')) {
+        return imageUrl
+      }
+      return `http://localhost:8080${imageUrl}`
+    },
     async loadProducts() {
       try {
         const response = await apiClient.get('/api/products')

@@ -1,10 +1,13 @@
 <template>
   <div class="home-container">
-    <!-- 轮播图 -->
     <div class="carousel">
       <div class="carousel-track" :style="{ transform: `translateX(-${currentSlide * 100}%)` }">
-        <div v-for="(slide, index) in slides" :key="index" class="carousel-slide">
-          <img :src="slide.image" :alt="'Slide ' + (index + 1)" class="slide-image">
+        <div v-for="(slide, index) in slides" :key="index" class="carousel-slide" @click="goToScenic(slide)">
+          <img :src="getImageUrl(slide.image)" :alt="slide.name" class="slide-image">
+          <div class="slide-overlay">
+            <h3>{{ slide.name }}</h3>
+            <p>{{ slide.description }}</p>
+          </div>
         </div>
       </div>
       <button class="carousel-btn prev" @click="prevSlide">❮</button>
@@ -19,24 +22,6 @@
       </div>
     </div>
     
-    <!-- 推荐产品 -->
-    <div class="recommended-products">
-      <h2>🔥 热门推荐</h2>
-      <div class="products-grid" v-if="products.length > 0">
-        <div v-for="product in products" :key="product.id" class="product-card">
-          <img v-if="product.imageUrl" :src="product.imageUrl" :alt="product.name" class="product-image">
-          <div v-else class="product-image-placeholder">🏞️</div>
-          <h3>{{ product.name }}</h3>
-          <p class="product-desc">{{ product.description || '暂无描述' }}</p>
-          <div class="product-footer">
-            <span class="price">¥{{ product.price }}</span>
-            <button class="detail-btn" @click="viewProductDetail(product)">查看详情</button>
-            <button class="book-btn" @click="bookProduct(product)">立即预订</button>
-          </div>
-        </div>
-      </div>
-
-    </div>
   </div>
 </template>
 
@@ -49,68 +34,62 @@ export default {
     return {
       currentSlide: 0,
       autoPlayInterval: null,
-      slides: [
-        {
-          image: 'https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=1200&h=500&fit=crop'
-        },
-        {
-          image: 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=1200&h=500&fit=crop'
-        },
-        {
-          image: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1200&h=500&fit=crop'
-        },
-        {
-          image: 'https://images.unsplash.com/photo-1436491865332-7a61a109cc05?w=1200&h=500&fit=crop'
-        }
-      ],
-      products: []
+      slides: []
     }
   },
   mounted() {
-    this.startAutoPlay()
-    this.loadProducts()
+    this.loadScenicAreas()
   },
   beforeUnmount() {
     this.stopAutoPlay()
   },
   methods: {
-    async loadProducts() {
+    getImageUrl(imageUrl) {
+      if (!imageUrl) return ''
+      if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+        return imageUrl
+      }
+      return `http://localhost:8080${imageUrl}`
+    },
+    async loadScenicAreas() {
       try {
-        const response = await apiClient.get('/api/products/on-sale')
-        this.products = response.data
+        const response = await apiClient.get('/api/large-areas')
+        const areas = response.data
+        const scenicAreas = areas.filter(area => area.isAreaType === 0)
+        this.slides = scenicAreas.slice(0, 6).map(area => ({
+          id: area.id,
+          name: area.name,
+          description: area.description,
+          image: area.imageUrl
+        }))
+        if (this.slides.length > 0) {
+          this.startAutoPlay()
+        }
       } catch (error) {
-        console.error('加载产品失败:', error)
+        console.error('加载景区数据失败:', error)
+        this.slides = [
+          { id: 1, name: '清明上河园', description: '宋文化主题景区', image: '/images/qingming-shangheyuan.jpg' },
+          { id: 2, name: '龙亭景区', description: '开封代表性历史景区', image: '/images/longting.jpg' },
+          { id: 3, name: '开封府', description: '包公文化和府衙文化', image: '/images/kaifengfu.jpg' },
+          { id: 4, name: '万岁山武侠城', description: '武侠演艺和互动体验', image: '/images/wansuishan.jpg' }
+        ]
+        this.startAutoPlay()
       }
     },
-    bookProduct(product) {
-      // 将产品添加到购物车
-      const cartItem = {
-        userId: localStorage.getItem('userId'),
-        productId: product.id,
-        productName: product.name,
-        price: product.price,
-        features: product.description ? product.description : ''
+    goToScenic(slide) {
+      if (slide && slide.id) {
+        this.$router.push(`/scenic/${slide.id}`)
       }
-      
-      apiClient.post('/api/cart', cartItem)
-        .then(() => {
-          alert('已添加到购物车')
-          this.$router.push('/shopping-cart')
-        })
-        .catch(error => {
-          console.error('添加失败:', error)
-          alert('添加失败，请重试')
-        })
-    },
-    viewProductDetail(product) {
-      // 跳转到产品详情页
-      this.$router.push(`/product/${product.id}`)
     },
     nextSlide() {
-      this.currentSlide = (this.currentSlide + 1) % this.slides.length
+      if (this.slides.length > 0) {
+        this.currentSlide = (this.currentSlide + 1) % this.slides.length
+      }
     },
     prevSlide() {
-      this.currentSlide = (this.currentSlide - 1 + this.slides.length) % this.slides.length
+      if (this.slides.length > 0) {
+        this.currentSlide = (this.currentSlide - 1 + this.slides.length) % this.slides.length
+      }
     },
     goToSlide(index) {
       this.currentSlide = index
@@ -136,4 +115,36 @@ export default {
 
 <style scoped>
 @import '@/assets/css/home.css';
+
+.slide-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+  color: white;
+  padding: 30px 20px 20px;
+  text-align: left;
+}
+
+.slide-overlay h3 {
+  margin: 0 0 8px 0;
+  font-size: 24px;
+  font-weight: 600;
+}
+
+.slide-overlay p {
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 80%;
+}
+
+.carousel-slide {
+  position: relative;
+  cursor: pointer;
+}
 </style>
