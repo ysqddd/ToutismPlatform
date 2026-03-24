@@ -6,6 +6,7 @@ import org.example.toutismplatform.entity.SmallScenicSpot;
 import org.example.toutismplatform.repository.LargeScenicAreaRepository;
 import org.example.toutismplatform.repository.SmallScenicSpotRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -33,6 +34,9 @@ public class RagService {
     @Autowired
     private PathService pathService;
 
+    @Autowired(required = false)
+    private JdbcTemplate jdbcTemplate;
+
     public String generateAnswer(String query) {
         if (query == null || query.trim().isEmpty()) {
             return "请先告诉我你的问题，我可以为你介绍景点或规划路线。";
@@ -57,12 +61,7 @@ public class RagService {
             context.append("位置：").append(defaultText(area.getLocation())).append("\n");
             context.append("开放时间：").append(defaultText(area.getOpeningHours())).append("\n");
             context.append("建议游览时长：").append(safeInt(area.getRecommendedVisitDuration())).append("分钟\n");
-            context.append("价格：");
-            if (safeInt(area.getIsAreaType()) == 1) {
-                context.append("免费（非景区节点）\n");
-            } else {
-                context.append(safeDecimal(area.getPrice())).append("元\n");
-            }
+            context.append(buildAreaPriceText(area)).append("\n");
             context.append("标签：").append(defaultText(area.getTags())).append("\n");
             context.append("偏好特征：自然=").append(safeDecimal(area.getNatureScore()))
                     .append("，人文=").append(safeDecimal(area.getCultureScore()))
@@ -107,10 +106,12 @@ public class RagService {
                 "3. 不要提及编程、数据库、接口等实现细节\n" +
                 "4. 若用户给出偏好，如少走路、亲子、拍照、人文、赶时间，要显式体现在建议中\n" +
                 "5. 优先结合景区标签、适合人群、游览体验和路线顺序给出建议\n" +
-                "6. 只用纯文本回答，不要使用 Markdown 格式\n" +
-                "7. 不要出现 #、*、-、>、`、--- 等符号\n" +
-                "8. 不要写 Markdown 标题，不要写项目符号列表\n" +
-                "9. 直接用自然段输出，分段时不要加任何特殊符号";
+                "6. 景区的价格一般表示门票或票价参考；饭店、餐馆、小吃店等餐饮地点的价格表示平均人均消费，不要说成门票\n" +
+                "7. 夜市、车站、大门、游客中心等开放型公共节点，如果价格为 0，表示无需门票或无固定消费\n" +
+                "8. 只用纯文本回答，不要使用 Markdown 格式\n" +
+                "9. 不要出现 #、*、-、>、`、--- 等符号\n" +
+                "10. 不要写 Markdown 标题，不要写项目符号列表\n" +
+                "11. 直接用自然段输出，分段时不要加任何特殊符号";
 
         String rawAnswer = ollamaChatModel.generate(enhancedQuery);
         return sanitizeAiAnswer(rawAnswer);
@@ -156,6 +157,11 @@ public class RagService {
         String routeMode = extractRouteMode(query, preferenceWeights);
         int maxStops = extractMaxStops(query);
 
+        LargeScenicArea singleArea = resolveSingleAreaRouteTarget(startArea, endArea, mentionedAreas);
+        if (singleArea != null && isSingleAreaTourIntent(query, startArea, endArea, mentionedAreas, singleArea)) {
+            return buildSingleAreaTourAnswer(singleArea, query, preferenceWeights);
+        }
+
         if (startArea != null && endArea != null && !Objects.equals(startArea.getId(), endArea.getId())) {
             Map<String, Object> selectedPath = selectRouteResult(startArea.getId(), endArea.getId(), routeMode, preferenceWeights);
             if (!Boolean.TRUE.equals(selectedPath.get("success"))) {
@@ -174,6 +180,362 @@ public class RagService {
             return String.valueOf(cityRoute.getOrDefault("message", "暂时无法生成城市内景区推荐路线。"));
         }
         return buildCityRouteAnswer(startArea, endArea, preferenceWeights, routeMode, cityRoute, maxStops);
+    }
+
+    private LargeScenicArea resolveSingleAreaRouteTarget(LargeScenicArea startArea,
+                                                         LargeScenicArea endArea,
+                                                         List<LargeScenicArea> mentionedAreas) {
+        Set<Long> ids = new LinkedHashSet<>();
+        LargeScenicArea candidate = null;
+        if (startArea != null && safeInt(startArea.getIsAreaType()) == 0) {
+            ids.add(startArea.getId());
+            candidate = startArea;
+        }
+        if (endArea != null && safeInt(endArea.getIsAreaType()) == 0) {
+            ids.add(endArea.getId());
+            candidate = endArea;
+        }
+        for (LargeScenicArea area : mentionedAreas) {
+            if (area != null && safeInt(area.getIsAreaType()) == 0) {
+                ids.add(area.getId());
+                if (candidate == null) {
+                    candidate = area;
+                }
+            }
+        }
+        return ids.size() == 1 ? candidate : null;
+    }
+
+    private boolean isSingleAreaTourIntent(String query,
+                                           LargeScenicArea startArea,
+                                           LargeScenicArea endArea,
+                                           List<LargeScenicArea> mentionedAreas,
+                                           LargeScenicArea singleArea) {
+        if (singleArea == null) {
+            return false;
+        }
+        if (startArea != null && endArea != null && !Objects.equals(startArea.getId(), endArea.getId())) {
+            return false;
+        }
+
+        String text = normalize(query);
+        boolean insideKeywords = containsAny(text,
+                "园内", "景区内", "入园", "进入", "进园", "游玩", "游览", "逛", "怎么玩", "怎么游",
+                "游玩路线", "游览路线", "游玩顺序", "游览顺序", "北门", "南门", "东门", "西门", "入口", "大门");
+        boolean trafficOnly = containsAny(text, "怎么去", "到那里", "去那里", "去景区", "到景区")
+                && !containsAny(text, "游玩", "游览", "园内", "景区内", "怎么玩", "游玩路线", "游玩顺序");
+        return insideKeywords && !trafficOnly;
+    }
+
+    private String buildSingleAreaTourAnswer(LargeScenicArea area,
+                                             String query,
+                                             Map<String, Double> preferenceWeights) {
+        List<SmallScenicSpot> allSpots = smallScenicSpotRepository.findAll();
+        List<SmallScenicSpot> areaSpots = new ArrayList<>();
+        for (SmallScenicSpot spot : allSpots) {
+            if (spot != null && Objects.equals(spot.getLargeAreaId(), area.getId())) {
+                areaSpots.add(spot);
+            }
+        }
+
+        if (areaSpots.isEmpty()) {
+            StringBuilder answer = new StringBuilder();
+            answer.append("景区：").append(area.getName()).append("\n");
+            answer.append("建议游玩时长：约").append(safeInt(area.getRecommendedVisitDuration())).append("分钟\n");
+            String priceText = buildAreaPriceText(area);
+            if (priceText != null && !priceText.isBlank()) {
+                answer.append(priceText).append("\n");
+            }
+            answer.append("说明：当前数据库里还没有该景区的园内点位数据，所以本次不再扩展到其他景区，只返回该景区本身的游玩建议。\n");
+            return answer.toString();
+        }
+
+        SmallScenicSpot entrySpot = selectEntrySpot(query, areaSpots);
+        List<SmallScenicSpot> orderedSpots = selectOrderedInsideSpots(area.getId(), areaSpots, entrySpot, preferenceWeights);
+        Map<String, Integer> entryEdgeInfo = entrySpot == null ? Collections.emptyMap() : loadEntryEdgeInfo(area.getId(), entrySpot.getId(), orderedSpots);
+        Integer entryDistance = entryEdgeInfo.get("distance");
+        Integer entryTime = entryEdgeInfo.get("time");
+
+        int totalSpotDuration = 0;
+        for (SmallScenicSpot spot : orderedSpots) {
+            if (safeInt(spot.getIsSpotType()) == 0) {
+                totalSpotDuration += safeInt(spot.getVisitingDuration());
+            }
+        }
+        int suggestedDuration = Math.max(safeInt(area.getRecommendedVisitDuration()), totalSpotDuration);
+
+        StringBuilder answer = new StringBuilder();
+        answer.append("景区：").append(area.getName()).append("\n");
+        if (entrySpot != null) {
+            answer.append("入园起点：").append(entrySpot.getName());
+            if (isSpecificEntryRequested(query) && !isEntryAlignedWithQuery(entrySpot, query)) {
+                answer.append("（未完全匹配到你指定的门口，已按景区内最接近的真实入口处理）");
+            }
+            answer.append("\n");
+            if (orderedSpots.size() > 1 && entryDistance != null && entryDistance > 0) {
+                answer.append("入园后建议先前往：")
+                        .append(orderedSpots.get(1).getName())
+                        .append("，步行约")
+                        .append(entryDistance)
+                        .append("米");
+                if (entryTime != null && entryTime > 0) {
+                    answer.append("，约").append(entryTime).append("分钟");
+                }
+                answer.append("\n");
+            }
+        }
+        answer.append("推荐园内顺序：\n");
+        for (int i = 0; i < orderedSpots.size(); i++) {
+            SmallScenicSpot spot = orderedSpots.get(i);
+            answer.append(i + 1)
+                    .append(". ")
+                    .append(spot.getName());
+            if (safeInt(spot.getIsSpotType()) == 1) {
+                answer.append("（入园节点）");
+            } else {
+                answer.append("（约")
+                        .append(safeInt(spot.getVisitingDuration()))
+                        .append("分钟）");
+            }
+            String desc = defaultText(spot.getDescription());
+            if (!"暂无信息".equals(desc)) {
+                answer.append("：").append(desc);
+            }
+            answer.append("\n");
+        }
+
+        if (!preferenceWeights.isEmpty()) {
+            String preferenceSummary = buildPreferenceSummary(preferenceWeights);
+            if (preferenceSummary != null && !preferenceSummary.trim().isEmpty()
+                    && !"未检测到明确偏好，默认按较高效率规划".equals(preferenceSummary)) {
+                answer.append("\n识别到的偏好：").append(preferenceSummary).append("\n");
+            }
+        }
+
+        answer.append("\n建议游玩时长：约")
+                .append(suggestedDuration)
+                .append("分钟\n");
+        String priceText = buildAreaPriceText(area);
+        if (priceText != null && !priceText.isBlank()) {
+            answer.append(priceText).append("\n");
+        }
+        answer.append("说明：本次仅规划")
+                .append(area.getName())
+                .append("园内路线，不再自动扩展到其他景区。\n");
+        return answer.toString();
+    }
+
+    private SmallScenicSpot selectEntrySpot(String query, List<SmallScenicSpot> areaSpots) {
+        String text = normalize(query);
+        List<SmallScenicSpot> facilitySpots = new ArrayList<>();
+        SmallScenicSpot firstSpot = areaSpots.isEmpty() ? null : areaSpots.get(0);
+        for (SmallScenicSpot spot : areaSpots) {
+            if (safeInt(spot.getIsSpotType()) == 1) {
+                facilitySpots.add(spot);
+            }
+        }
+        facilitySpots.sort((a, b) -> Integer.compare(normalize(b.getName()).length(), normalize(a.getName()).length()));
+
+        for (SmallScenicSpot spot : facilitySpots) {
+            String name = normalize(spot.getName());
+            if (!name.isEmpty() && text.contains(name)) {
+                return spot;
+            }
+        }
+
+        for (SmallScenicSpot spot : facilitySpots) {
+            if (isEntryAlignedWithQuery(spot, query)) {
+                return spot;
+            }
+        }
+
+        for (SmallScenicSpot spot : facilitySpots) {
+            String name = normalize(spot.getName());
+            if ((containsAny(text, "入口", "入园", "进园", "进入", "大门", "门口") && containsAny(name, "门", "入口", "游客中心"))
+                    || name.contains("入口") || name.contains("游客中心") || name.contains("迎宾门")) {
+                return spot;
+            }
+        }
+
+        return !facilitySpots.isEmpty() ? facilitySpots.get(0) : firstSpot;
+    }
+
+    private List<SmallScenicSpot> selectOrderedInsideSpots(Long areaId,
+                                                           List<SmallScenicSpot> areaSpots,
+                                                           SmallScenicSpot entrySpot,
+                                                           Map<String, Double> preferenceWeights) {
+        List<SmallScenicSpot> scenicSpots = new ArrayList<>();
+        for (SmallScenicSpot spot : areaSpots) {
+            if (entrySpot != null && Objects.equals(entrySpot.getId(), spot.getId())) {
+                continue;
+            }
+            if (safeInt(spot.getIsSpotType()) == 0) {
+                scenicSpots.add(spot);
+            }
+        }
+
+        SmallScenicSpot linkedFirstSpot = findFirstConnectedScenicSpot(areaId, entrySpot, scenicSpots);
+        if (linkedFirstSpot != null) {
+            scenicSpots.removeIf(spot -> Objects.equals(spot.getId(), linkedFirstSpot.getId()));
+        }
+
+        boolean hasExplicitPreference = hasInsidePreference(preferenceWeights);
+        scenicSpots.sort((a, b) -> {
+            if (hasExplicitPreference) {
+                int scoreCompare = Double.compare(scoreSpot(b, preferenceWeights), scoreSpot(a, preferenceWeights));
+                if (scoreCompare != 0) {
+                    return scoreCompare;
+                }
+            }
+            return Long.compare(a.getId(), b.getId());
+        });
+
+        List<SmallScenicSpot> ordered = new ArrayList<>();
+        if (entrySpot != null) {
+            ordered.add(entrySpot);
+        }
+        if (linkedFirstSpot != null) {
+            ordered.add(linkedFirstSpot);
+        }
+        ordered.addAll(scenicSpots);
+        if (ordered.isEmpty()) {
+            ordered.addAll(areaSpots);
+        }
+        return ordered;
+    }
+
+    private SmallScenicSpot findFirstConnectedScenicSpot(Long areaId,
+                                                         SmallScenicSpot entrySpot,
+                                                         List<SmallScenicSpot> scenicSpots) {
+        if (entrySpot == null || scenicSpots == null || scenicSpots.isEmpty() || jdbcTemplate == null) {
+            return null;
+        }
+        Map<Long, SmallScenicSpot> spotMap = new HashMap<>();
+        for (SmallScenicSpot spot : scenicSpots) {
+            if (spot != null && spot.getId() != null) {
+                spotMap.put(spot.getId(), spot);
+            }
+        }
+        if (spotMap.isEmpty()) {
+            return null;
+        }
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                    "SELECT to_spot_id AS targetId, distance, time_cost FROM scenic_edge WHERE large_area_id = ? AND from_spot_id = ? " +
+                            "UNION ALL " +
+                            "SELECT from_spot_id AS targetId, distance, time_cost FROM scenic_edge WHERE large_area_id = ? AND to_spot_id = ?",
+                    areaId, entrySpot.getId(), areaId, entrySpot.getId());
+            rows.sort(Comparator
+                    .comparingDouble((Map<String, Object> row) -> getNumber(row.get("distance")))
+                    .thenComparingDouble(row -> getNumber(row.get("time_cost"))));
+            for (Map<String, Object> row : rows) {
+                Long targetId = toLong(row.get("targetId"));
+                SmallScenicSpot target = targetId == null ? null : spotMap.get(targetId);
+                if (target != null) {
+                    return target;
+                }
+            }
+        } catch (Exception ignored) {
+            return null;
+        }
+        return null;
+    }
+
+    private Map<String, Integer> loadEntryEdgeInfo(Long areaId,
+                                                   Long entrySpotId,
+                                                   List<SmallScenicSpot> orderedSpots) {
+        Map<String, Integer> result = new HashMap<>();
+        if (jdbcTemplate == null || areaId == null || entrySpotId == null || orderedSpots == null || orderedSpots.size() < 2) {
+            return result;
+        }
+        Long nextSpotId = orderedSpots.get(1).getId();
+        if (nextSpotId == null) {
+            return result;
+        }
+        try {
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                    "SELECT distance, time_cost FROM scenic_edge WHERE large_area_id = ? AND " +
+                            "((from_spot_id = ? AND to_spot_id = ?) OR (from_spot_id = ? AND to_spot_id = ?)) " +
+                            "ORDER BY distance ASC, time_cost ASC LIMIT 1",
+                    areaId, entrySpotId, nextSpotId, nextSpotId, entrySpotId);
+            if (!rows.isEmpty()) {
+                Map<String, Object> row = rows.get(0);
+                result.put("distance", (int) Math.round(getNumber(row.get("distance"))));
+                result.put("time", (int) Math.round(getNumber(row.get("time_cost"))));
+            }
+        } catch (Exception ignored) {
+            return result;
+        }
+        return result;
+    }
+
+    private boolean isSpecificEntryRequested(String query) {
+        String text = normalize(query);
+        return containsAny(text,
+                "北门", "南门", "东门", "西门", "北大门", "南大门", "东大门", "西大门",
+                "午门", "山门", "府门", "中门", "端门", "金水门", "丹凤门", "通津门", "东便门", "迎宾门");
+    }
+
+    private boolean isEntryAlignedWithQuery(SmallScenicSpot spot, String query) {
+        if (spot == null) {
+            return false;
+        }
+        String text = normalize(query);
+        String name = normalize(spot.getName());
+        if (name.isEmpty()) {
+            return false;
+        }
+        if (text.contains(name)) {
+            return true;
+        }
+        if (name.contains("北") && name.contains("门") && text.contains("北门")) {
+            return true;
+        }
+        if (name.contains("南") && name.contains("门") && text.contains("南门")) {
+            return true;
+        }
+        if (name.contains("东") && name.contains("门") && text.contains("东门")) {
+            return true;
+        }
+        if (name.contains("西") && name.contains("门") && text.contains("西门")) {
+            return true;
+        }
+        return false;
+    }
+
+    private boolean hasInsidePreference(Map<String, Double> weights) {
+        if (weights == null || weights.isEmpty()) {
+            return false;
+        }
+        return weights.getOrDefault("nature", 0.0) > 0.0
+                || weights.getOrDefault("culture", 0.0) > 0.0
+                || weights.getOrDefault("photography", 0.0) > 0.0
+                || weights.getOrDefault("familyFriendly", 0.0) > 0.0
+                || weights.getOrDefault("elderlyFriendly", 0.0) > 0.0
+                || weights.getOrDefault("leisure", 0.0) > 0.0
+                || weights.getOrDefault("foodConvenience", 0.0) > 0.0
+                || weights.getOrDefault("restroomConvenience", 0.0) > 0.0
+                || weights.getOrDefault("popularity", 0.0) > 0.0
+                || weights.getOrDefault("intensity", 0.0) > 0.0
+                || weights.getOrDefault("crowd", 0.0) > 0.0;
+    }
+
+    private double scoreSpot(SmallScenicSpot spot, Map<String, Double> weights) {
+        double score = 0.0;
+        score += safeDecimal(spot.getNatureScore()) * weights.getOrDefault("nature", 0.0);
+        score += safeDecimal(spot.getCultureScore()) * weights.getOrDefault("culture", 0.0);
+        score += safeDecimal(spot.getPhotographyScore()) * weights.getOrDefault("photography", 0.0);
+        score += safeDecimal(spot.getFamilyFriendlyScore()) * weights.getOrDefault("familyFriendly", 0.0);
+        score += safeDecimal(spot.getElderlyFriendlyScore()) * weights.getOrDefault("elderlyFriendly", 0.0);
+        score += safeDecimal(spot.getRestConvenienceScore()) * (weights.getOrDefault("leisure", 0.0)
+                + weights.getOrDefault("restroomConvenience", 0.0) * 0.8
+                + weights.getOrDefault("comfort", 0.0) * 0.5);
+        score += (5 - safeInt(spot.getIntensityLevel())) * weights.getOrDefault("intensity", 0.0);
+        score += (5 - safeInt(spot.getQueueLevel())) * weights.getOrDefault("crowd", 0.0);
+        score += safeInt(spot.getVisitingDuration()) > 0
+                ? (120.0 / Math.max(20.0, safeInt(spot.getVisitingDuration()))) * weights.getOrDefault(MODE_DURATION, 0.0)
+                : 0.0;
+        return score;
     }
 
     private Map<String, Object> selectRouteResult(Long startAreaId,
@@ -641,14 +1003,61 @@ public class RagService {
     }
 
     private boolean containsAny(String text, String... keywords) {
+        if (text == null || text.isBlank() || keywords == null) {
+            return false;
+        }
         for (String keyword : keywords) {
-            if (text.contains(normalize(keyword))) {
+            if (keyword != null && !keyword.isBlank() && text.contains(normalize(keyword))) {
                 return true;
             }
         }
         return false;
     }
 
+    private String buildAreaPriceText(LargeScenicArea area) {
+        BigDecimal price = area == null ? BigDecimal.ZERO : area.getPrice();
+        BigDecimal safePrice = price == null ? BigDecimal.ZERO : price;
+
+        if (isFoodPlace(area)) {
+            return "参考人均消费：" + safeDecimal(safePrice) + "元";
+        }
+
+        if (isOpenConsumptionNode(area)) {
+            if (safePrice.compareTo(BigDecimal.ZERO) > 0) {
+                return "门票：免费；消费参考：" + safeDecimal(safePrice) + "元";
+            }
+            return "门票：免费（开放型公共节点）";
+        }
+
+        if (safeInt(area == null ? null : area.getIsAreaType()) == 1) {
+            if (safePrice.compareTo(BigDecimal.ZERO) > 0) {
+                return "费用参考：" + safeDecimal(safePrice) + "元";
+            }
+            return "免费（非景区节点）";
+        }
+
+        return "门票参考：" + safeDecimal(safePrice) + "元";
+    }
+
+    private boolean isFoodPlace(LargeScenicArea area) {
+        String combined = buildAreaKeywordText(area);
+        return containsAny(combined,
+                "饭店", "饭馆", "餐厅", "餐馆", "酒楼", "老店", "小吃", "美食", "豫菜", "灌汤包", "锅贴", "桶子鸡", "熟食", "正餐", "轻餐");
+    }
+
+    private boolean isOpenConsumptionNode(LargeScenicArea area) {
+        String combined = buildAreaKeywordText(area);
+        return containsAny(combined,
+                "夜市", "美食街", "步行街", "广场", "商圈", "街区", "游客中心", "大门", "车站", "火车站", "高铁站", "公交枢纽");
+    }
+
+    private String buildAreaKeywordText(LargeScenicArea area) {
+        if (area == null) {
+            return "";
+        }
+        return (defaultText(area.getName()) + " " + defaultText(area.getDescription()) + " " + defaultText(area.getTags()))
+                .toLowerCase(Locale.ROOT);
+    }
     private String sanitizeAiAnswer(String text) {
         if (text == null || text.isBlank()) {
             return "抱歉，暂时没有生成合适的回答，请稍后再试。";

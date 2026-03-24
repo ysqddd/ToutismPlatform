@@ -92,7 +92,7 @@ public class PathService {
         used.add(currentId);
 
         int scenicCount = scenicAreas.size();
-        int target = scenicCount;
+        int target = maxStops == Integer.MAX_VALUE ? scenicCount : Math.max(1, Math.min(maxStops, scenicCount));
         while (countScenicStops(stops, areaMap) < target) {
             Long nextId = selectNextArea(currentId, scenicAreas, used, graph, areaMap, mode, preferenceWeights, preferredEndAreaId);
             if (nextId == null) {
@@ -567,12 +567,25 @@ public class PathService {
             return summaryMap;
         }
         try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                    "SELECT large_area_id AS largeAreaId, " +
-                            "COALESCE(SUM(distance), 0) AS totalDistance, " +
-                            "COALESCE(SUM(time_cost), 0) AS totalTime " +
-                            "FROM scenic_edge GROUP BY large_area_id"
-            );
+            List<Map<String, Object>> rows;
+            try {
+                rows = jdbcTemplate.queryForList(
+                        "SELECT se.large_area_id AS largeAreaId, " +
+                                "COALESCE(SUM(CASE WHEN COALESCE(fs.is_spot_type, 0) = 0 AND COALESCE(ts.is_spot_type, 0) = 0 THEN se.distance ELSE 0 END), 0) AS totalDistance, " +
+                                "COALESCE(SUM(CASE WHEN COALESCE(fs.is_spot_type, 0) = 0 AND COALESCE(ts.is_spot_type, 0) = 0 THEN se.time_cost ELSE 0 END), 0) AS totalTime " +
+                                "FROM scenic_edge se " +
+                                "LEFT JOIN small_scenic_spot fs ON se.from_spot_id = fs.id " +
+                                "LEFT JOIN small_scenic_spot ts ON se.to_spot_id = ts.id " +
+                                "GROUP BY se.large_area_id"
+                );
+            } catch (Exception ignored) {
+                rows = jdbcTemplate.queryForList(
+                        "SELECT large_area_id AS largeAreaId, " +
+                                "COALESCE(SUM(distance), 0) AS totalDistance, " +
+                                "COALESCE(SUM(time_cost), 0) AS totalTime " +
+                                "FROM scenic_edge GROUP BY large_area_id"
+                );
+            }
             for (Map<String, Object> row : rows) {
                 Long areaId = toLong(row.get("largeAreaId"));
                 if (areaId == null) {
