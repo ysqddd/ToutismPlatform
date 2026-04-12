@@ -1,40 +1,53 @@
 <template>
-  <div class="subscription-container">
-    <h2 class="page-title">📝 在线预定</h2>
-    
-    <div class="subscription-plans">
-      <div 
-        v-for="(plan, index) in plans" 
-        :key="index" 
-        class="plan-card"
-        @click="selectPlan(plan)"
-      >
-        <div class="plan-image" v-if="plan.imageUrl">
-          <img :src="getImageUrl(plan.imageUrl)" :alt="plan.name">
-        </div>
-        <div class="plan-image-placeholder" v-else>
-          <span>🏞️</span>
-        </div>
-        <h3>{{ plan.name }}</h3>
-        <div class="plan-price">
-          <span class="currency">¥</span>
-          <span class="amount">{{ plan.price }}</span>
-        </div>
-        <ul class="plan-features">
-          <li v-for="(feature, idx) in plan.features" :key="idx">
-            ✓ {{ feature }}
-          </li>
-        </ul>
-        <button 
-          class="subscribe-btn"
-          @click.stop="selectPlan(plan)"
-        >
-          立即预定
-        </button>
-      </div>
-    </div>
-    
+  <div class="portal-page subscription-page">
+    <div class="portal-wrap">
+      <section class="portal-hero subscription-hero">
+        <div class="portal-pill light">TRAVEL PACKAGE</div>
+        <h1 class="portal-title">为你准备好的旅行套餐</h1>
+        <p class="portal-subtitle">
+          如果你想省去自己搭配路线的时间，可以直接查看这些整理好的套餐方案，
+          更快找到适合预算和出游节奏的选择。
+        </p>
+      </section>
 
+      <section class="portal-section">
+        <div class="portal-section-head">
+          <div>
+            <div class="portal-pill soft">BOOK NOW</div>
+            <h2>甄选套餐</h2>
+            <p>点击卡片或按钮即可直接加入购物车，保留现有业务逻辑。</p>
+          </div>
+        </div>
+
+        <div v-if="plans.length" class="portal-grid three">
+          <article
+            v-for="(plan, index) in plans"
+            :key="plan.id || index"
+            class="portal-card plan-card"
+            @click="selectPlan(plan)"
+          >
+            <img v-if="plan.imageUrl" :src="getImageUrl(plan.imageUrl)" :alt="plan.name" class="portal-media" />
+            <div v-else class="portal-media portal-placeholder">🏞️</div>
+            <div class="portal-card-body">
+              <div class="plan-topline">
+                <div class="portal-pill soft">轻松成行</div>
+                <div class="plan-price">¥{{ plan.price }}</div>
+              </div>
+              <h3>{{ plan.name }}</h3>
+              <ul class="plan-features">
+                <li v-for="(feature, idx) in plan.features" :key="idx">{{ feature }}</li>
+              </ul>
+              <button class="portal-btn primary plan-btn" @click.stop="selectPlan(plan)">立即预定</button>
+            </div>
+          </article>
+        </div>
+
+        <div v-else class="portal-surface portal-empty">
+          <strong>套餐加载中</strong>
+          <p class="portal-subtitle dark">商品数据接入完成后，这里会展示封面、价格和核心亮点。</p>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -88,7 +101,7 @@ export default {
         this.$router.push('/login')
         return
       }
-      
+
       apiClient.post(`/api/cart/product?userId=${userId}&productId=${plan.productId}`)
         .then(() => {
           alert('已添加到购物车')
@@ -108,129 +121,67 @@ export default {
 </script>
 
 <style scoped>
-.subscription-container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
-}
+@import '@/assets/css/portal-theme.css';
 
-.page-title {
-  text-align: center;
-  font-size: 28px;
-  color: #333;
-  margin-bottom: 30px;
-}
-
-.subscription-plans {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
+.subscription-hero {
+  background:
+    linear-gradient(120deg, rgba(10, 39, 28, 0.92), rgba(35, 89, 63, 0.8)),
+    url('http://127.0.0.1:8080/images/package-classic-one-day.jpg') center/cover;
 }
 
 .plan-card {
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
   cursor: pointer;
-  transition: transform 0.3s, box-shadow 0.3s;
-  position: relative;
-  overflow: hidden;
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
 .plan-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  transform: translateY(-6px);
+  box-shadow: var(--portal-shadow-lg);
 }
 
-.plan-image {
-  width: 100%;
-  height: 160px;
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 15px;
-}
-
-.plan-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.3s;
-}
-
-.plan-card:hover .plan-image img {
-  transform: scale(1.05);
-}
-
-.plan-image-placeholder {
-  width: 100%;
-  height: 160px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+.portal-card-body {
   display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.plan-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
   align-items: center;
-  justify-content: center;
-  margin-bottom: 15px;
-}
-
-.plan-image-placeholder span {
-  font-size: 48px;
-}
-
-.plan-card h3 {
-  font-size: 18px;
-  color: #333;
-  margin: 0 0 10px 0;
+  margin-bottom: 14px;
 }
 
 .plan-price {
-  margin-bottom: 15px;
-}
-
-.plan-price .currency {
-  font-size: 16px;
-  color: #ff6b6b;
-}
-
-.plan-price .amount {
-  font-size: 32px;
-  font-weight: bold;
-  color: #ff6b6b;
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--portal-danger);
 }
 
 .plan-features {
   list-style: none;
+  margin: 18px 0 22px;
   padding: 0;
-  margin: 0 0 20px 0;
+  display: grid;
+  gap: 10px;
+  flex: 1;
+  align-content: start;
 }
 
 .plan-features li {
-  font-size: 14px;
-  color: #666;
-  padding: 8px 0;
-  border-bottom: 1px solid #eee;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: #f7faf8;
+  color: var(--portal-muted);
+  line-height: 1.7;
 }
 
-.plan-features li:last-child {
-  border-bottom: none;
-}
-
-.subscribe-btn {
+.plan-btn {
   width: 100%;
-  padding: 12px;
-  border: none;
-  border-radius: 8px;
-  font-size: 16px;
-  cursor: pointer;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  transition: opacity 0.3s;
-}
-
-.subscribe-btn:hover {
-  opacity: 0.9;
+  min-height: 48px;
+  margin-top: auto;
 }
 </style>

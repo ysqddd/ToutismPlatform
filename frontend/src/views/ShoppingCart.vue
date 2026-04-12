@@ -1,70 +1,95 @@
 <template>
-  <div class="shopping-cart-container">
-    <h2 class="page-title">🛒 购物车</h2>
+  <div class="portal-page cart-page">
+    <div class="portal-wrap">
+      <section class="portal-hero cart-hero">
+        <div class="portal-pill light">SHOPPING CART</div>
+        <h1 class="portal-title">确认你的旅行清单</h1>
+        <p class="portal-subtitle">
+          这里会汇总你已经选好的景区和套餐，方便你统一调整数量、核对金额，
+          再安心进入下一步预订流程。
+        </p>
+      </section>
 
-    <div v-if="cartItems.length === 0" class="empty-cart">
-      <div class="empty-cart-icon">🛒</div>
-      <p>购物车空空如也</p>
-      <button class="back-btn" @click="goToSubscription">去逛逛</button>
-    </div>
-
-    <div v-else class="cart-items">
-      <div
-          v-for="(item, index) in cartItems"
-          :key="item.id"
-          class="cart-item-card"
-      >
-        <div class="cart-item-header">
-          <div class="item-type-badge">
-            {{ item.itemType === 'PRODUCT' || item.itemType === 'PACKAGE' ? '🎁 套餐' : '🎫 景区门票' }}
-          </div>
-          <h3>{{ item.itemName }}</h3>
-          <button class="remove-btn" @click="removeItem(index)">×</button>
-        </div>
-
-        <div class="cart-item-image">
-          <img
-              v-if="item.imageUrl && !item.imageError"
-              :src="getImageUrl(item.imageUrl)"
-              :alt="item.itemName"
-              @error="markImageError(item.id)"
-          >
-          <div v-else class="cart-image-placeholder">
-            {{ item.itemType === 'PRODUCT' || item.itemType === 'PACKAGE' ? '套餐图片' : '景区图片' }}
+      <section class="portal-section">
+        <div v-if="cartItems.length === 0" class="portal-surface portal-empty">
+          <strong>购物车空空如也</strong>
+          <p class="portal-subtitle dark">先去看看推荐套餐或景区门票，把心仪项目加入你的旅程。</p>
+          <div class="portal-actions empty-actions">
+            <button class="portal-btn primary" @click="goToSubscription">去逛逛</button>
           </div>
         </div>
 
-        <div class="cart-item-price">
-          <span class="currency">¥</span>
-          <span class="amount">{{ item.price }}</span>
-        </div>
+        <div v-else class="portal-grid two cart-layout">
+          <div class="portal-surface portal-panel">
+            <div class="portal-section-head">
+              <div>
+                <div class="portal-pill soft">ITEMS</div>
+                <h2>已选商品</h2>
+              </div>
+            </div>
 
-        <div class="quantity-control">
-          <button class="quantity-btn" @click="updateQuantity(item, -1)">-</button>
-          <span class="quantity-value">{{ item.quantity }}</span>
-          <button class="quantity-btn" @click="updateQuantity(item, 1)">+</button>
-        </div>
+            <div class="portal-list">
+              <article
+                v-for="(item, index) in cartItems"
+                :key="item.id"
+                class="portal-list-item cart-item"
+              >
+                <div class="cart-item-head">
+                  <div class="portal-pill soft item-tag">
+                    {{ item.itemType === 'PRODUCT' || item.itemType === 'PACKAGE' ? '套餐' : '景区门票' }}
+                  </div>
+                  <button class="remove-btn" @click="removeItem(index)">删除</button>
+                </div>
 
-        <div class="cart-item-total">
-          小计：¥{{ (item.price * item.quantity).toFixed(2) }}
-        </div>
+                <div class="cart-item-main">
+                  <div class="cart-item-image">
+                    <img
+                      v-if="item.imageUrl && !item.imageError"
+                      :src="getImageUrl(item.imageUrl)"
+                      :alt="item.itemName"
+                      class="cart-image"
+                      @error="markImageError(item.id)"
+                    >
+                    <div v-else class="portal-placeholder cart-image">旅行商品</div>
+                  </div>
 
-        <div v-if="item.features" class="cart-item-features">
-          <p>{{ item.features }}</p>
-        </div>
-      </div>
+                  <div class="cart-item-body">
+                    <h3>{{ item.itemName }}</h3>
+                    <p v-if="item.features">{{ item.features }}</p>
+                    <div class="cart-price-row">
+                      <span class="portal-price">¥{{ item.price }}</span>
+                      <span>小计：¥{{ (item.price * item.quantity).toFixed(2) }}</span>
+                    </div>
+                    <div class="quantity-control">
+                      <button class="quantity-btn" @click="updateQuantity(item, -1)">-</button>
+                      <span class="quantity-value">{{ item.quantity }}</span>
+                      <button class="quantity-btn" @click="updateQuantity(item, 1)">+</button>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </div>
+          </div>
 
-      <div class="cart-summary">
-        <div class="summary-row">
-          <span>商品数量：</span>
-          <span>{{ totalQuantity }} 件</span>
+          <aside class="portal-surface portal-panel summary-panel">
+            <div class="portal-pill soft">SUMMARY</div>
+            <h2>结算概览</h2>
+            <div class="portal-kv">
+              <div class="portal-kv-item">
+                <strong>商品数量</strong>
+                <span>{{ totalQuantity }} 件</span>
+              </div>
+              <div class="portal-kv-item">
+                <strong>预计总价</strong>
+                <span class="portal-price">¥{{ totalPrice }}</span>
+              </div>
+            </div>
+            <div class="portal-actions summary-actions">
+              <button class="portal-btn primary" @click="checkout">去结算</button>
+            </div>
+          </aside>
         </div>
-        <div class="summary-row total">
-          <span>总计：</span>
-          <span class="total-amount">¥{{ totalPrice }}</span>
-        </div>
-        <button class="checkout-btn" @click="checkout">去结算</button>
-      </div>
+      </section>
     </div>
   </div>
 </template>
@@ -84,8 +109,8 @@ export default {
   computed: {
     totalPrice() {
       return this.cartItems
-          .reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity || 0), 0)
-          .toFixed(2)
+        .reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity || 0), 0)
+        .toFixed(2)
     },
     totalQuantity() {
       return this.cartItems.reduce((sum, item) => sum + item.quantity, 0)
@@ -112,50 +137,38 @@ export default {
       let value = String(imageUrl).trim()
       if (!value) return ''
       if (/^https?:\/\//i.test(value)) return value
-
       value = value.replace(/\\/g, '/')
       value = value.replace(/^classpath:/i, '')
       value = value.replace(/^src\/main\//i, '')
       value = value.replace(/^public\//i, '')
       value = value.replace(/^static\//i, '')
       value = value.replace(/^resources\//i, '')
-
       const imagesIndex = value.lastIndexOf('images/')
       if (imagesIndex >= 0) {
         value = value.substring(imagesIndex)
       }
-
       return value.startsWith('/') ? value : `/${value}`
     },
-
     getImageUrl(imageUrl) {
       const normalized = this.normalizeImagePath(imageUrl)
       if (!normalized) return ''
       if (/^https?:\/\//i.test(normalized)) return normalized
       return `${this.backendBaseUrl}${normalized}`
     },
-
     markImageError(id) {
       this.cartItems = this.cartItems.map(item => item.id === id ? { ...item, imageError: true } : item)
     },
-
     async loadUserInfo() {
       const savedUserId = localStorage.getItem('userId')
       const savedUsername = localStorage.getItem('username')
-
-      if (savedUserId) {
-        this.userId = Number(savedUserId)
-      }
-      if (savedUsername) {
-        this.username = savedUsername
-      }
+      if (savedUserId) this.userId = Number(savedUserId)
+      if (savedUsername) this.username = savedUsername
 
       try {
         const response = await apiClient.get('/api/auth/current-user')
         if (response && response.data) {
           this.userId = response.data.id != null ? Number(response.data.id) : this.userId
           this.username = response.data.username || this.username || ''
-
           if (this.userId != null && !Number.isNaN(this.userId)) {
             localStorage.setItem('userId', String(this.userId))
           }
@@ -169,7 +182,6 @@ export default {
 
       await this.loadCart()
     },
-
     async loadCart() {
       if (this.userId == null || Number.isNaN(this.userId)) return
 
@@ -197,7 +209,6 @@ export default {
         console.error('加载购物车失败:', error)
       }
     },
-
     async updateQuantity(item, delta) {
       const newQuantity = item.quantity + delta
       if (newQuantity < 1) return
@@ -211,7 +222,6 @@ export default {
         alert('更新失败，请重试')
       }
     },
-
     async removeItem(index) {
       const item = this.cartItems[index]
       try {
@@ -225,9 +235,7 @@ export default {
         alert('删除失败，请重试')
       }
     },
-
     async checkout() {
-      console.log('结算商品:', this.cartItems)
       try {
         const orderData = {
           userId: this.userId,
@@ -241,7 +249,6 @@ export default {
         alert('创建订单失败，请重试')
       }
     },
-
     async clearCart() {
       try {
         await apiClient.delete(`/api/cart?userId=${this.userId}`)
@@ -251,11 +258,9 @@ export default {
         console.error('清空购物车失败:', error)
       }
     },
-
     goToSubscription() {
       this.$router.push('/subscription')
     },
-
     handleStorageChange(event) {
       if (event.key === 'cartRefreshAt') {
         this.loadCart()
@@ -274,146 +279,118 @@ export default {
 </script>
 
 <style scoped>
-.shopping-cart-container {
-  width: 100%;
-  padding: 40px 20px 20px;
-  max-width: 800px;
-  margin: 0 auto;
-  min-height: calc(100vh - 60px);
-  box-sizing: border-box;
+@import '@/assets/css/portal-theme.css';
+
+.cart-hero {
+  background:
+    linear-gradient(120deg, rgba(10, 39, 28, 0.92), rgba(35, 89, 63, 0.82)),
+    url('http://127.0.0.1:8080/images/package-two-day-deep.jpg') center/cover;
 }
-.page-title {
-  font-size: 28px;
-  color: #667eea;
-  margin-bottom: 30px;
-  text-align: center;
-  margin-top: 0;
-  padding-top: 0;
+
+.cart-layout {
+  align-items: start;
 }
-.empty-cart {
-  text-align: center;
-  padding: 60px 20px;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-}
-.empty-cart-icon { font-size: 80px; margin-bottom: 20px; }
-.empty-cart p { font-size: 18px; color: #666; margin-bottom: 30px; }
-.back-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  padding: 12px 24px;
-  border-radius: 25px;
-  cursor: pointer;
-  font-size: 16px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1.2;
-  box-sizing: border-box;
-}
-.cart-items { display: flex; flex-direction: column; gap: 20px; }
-.cart-item-card {
-  background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-}
-.cart-item-header {
-  display: flex; align-items: center; gap: 15px; margin-bottom: 15px;
-}
-.item-type-badge {
-  background: #f0f8ff; color: #667eea; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold;
-}
-.cart-item-header h3 { flex: 1; margin: 0; color: #333; font-size: 20px; }
-.remove-btn {
-  background: #ff4757;
-  color: white;
-  border: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 18px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  padding: 0;
-  box-sizing: border-box;
-}
-.cart-item-image {
-  margin-bottom: 15px; width: 100%; height: 220px; border-radius: 10px; overflow: hidden; background: #f5f7fa;
-}
-.cart-item-image img {
-  width: 100%; height: 100%; object-fit: cover; display: block;
-}
-.cart-image-placeholder {
-  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #666; background: linear-gradient(135deg, #f5f7fa, #e4eaf3);
-}
-.cart-item-price { margin-bottom: 10px; text-align: center; }
-.currency { font-size: 24px; color: #e74c3c; }
-.amount { font-size: 36px; font-weight: bold; color: #e74c3c; }
-.quantity-control {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  margin: 18px 0 14px;
-}
-.quantity-btn {
-  width: 44px;
-  height: 44px;
-  border: 2px solid #667eea;
+
+.cart-item {
   background: #fff;
-  color: #667eea;
-  border-radius: 50%;
-  cursor: pointer;
-  font-size: 26px;
-  font-weight: 700;
-  line-height: 1;
-  padding: 0;
+}
+
+.cart-item-head {
   display: flex;
+  justify-content: space-between;
+  gap: 12px;
   align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-sizing: border-box;
 }
-.quantity-value {
-  width: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  font-weight: 700;
-  color: #333;
-  line-height: 1;
-  text-align: center;
-}
-.cart-item-total { text-align: center; font-size: 18px; font-weight: bold; color: #667eea; margin-bottom: 15px; }
-.cart-item-features {
-  background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea;
-}
-.cart-item-features p { margin: 0; color: #666; line-height: 1.5; }
-.cart-summary {
-  background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); position: sticky; bottom: 20px;
-}
-.summary-row { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 18px; }
-.summary-row.total { border-top: 2px solid #eee; padding-top: 15px; font-weight: bold; font-size: 24px; }
-.total-amount { color: #e74c3c; }
-.checkout-btn {
-  width: 100%;
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-  color: white;
+
+.remove-btn {
+  min-height: 38px;
+  padding: 0 18px;
+  border-radius: 999px;
   border: none;
-  padding: 15px;
-  border-radius: 25px;
-  font-size: 18px;
-  font-weight: bold;
-  cursor: pointer;
-  margin-top: 20px;
+  background: #fff1ee;
+  color: var(--portal-danger);
+}
+
+.cart-item-main {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 18px;
+  align-items: center;
+}
+
+.cart-item-image,
+.cart-image {
+  width: 100%;
+  height: 132px;
+  border-radius: 20px;
+  object-fit: cover;
+}
+
+.cart-item-body h3 {
+  margin: 0 0 8px;
+}
+
+.cart-price-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin: 14px 0;
+  color: var(--portal-muted);
+}
+
+.quantity-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #dfece5, #edf5f0);
+  border: 1px solid rgba(31, 98, 68, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+.quantity-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  line-height: 1.2;
-  box-sizing: border-box;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: linear-gradient(135deg, #1f6244, #2e7b56);
+  color: #fff;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 10px 18px rgba(31, 98, 68, 0.18);
+}
+
+.quantity-value {
+  min-width: 44px;
+  padding: 0 6px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 24px;
+  color: var(--portal-text);
+}
+
+.summary-panel {
+  position: sticky;
+  top: 96px;
+}
+
+.summary-actions .portal-btn {
+  width: 100%;
+}
+
+.empty-actions {
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .cart-item-main {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

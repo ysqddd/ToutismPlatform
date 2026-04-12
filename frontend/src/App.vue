@@ -31,7 +31,9 @@ const showNavBar = computed(() => {
 .main-content {
   flex: 1;
   margin-top: 60px; /* navbar height */
-  background-color: #ffffff;
+  background:
+    radial-gradient(circle at top left, rgba(131, 184, 157, 0.18), transparent 28%),
+    linear-gradient(180deg, #f7faf8 0%, #eff5f0 100%);
   min-height: calc(100vh - 60px);
   width: 100%;
   box-sizing: border-box;

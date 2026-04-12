@@ -1,11 +1,11 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
   color-scheme: light;
   color: #213547;
-  background-color: #ffffff;
+  background-color: #f5f8f6;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -38,11 +38,11 @@ body {
 
 a {
   font-weight: 500;
-  color: #646cff;
+  color: #1f6244;
   text-decoration: inherit;
 }
 a:hover {
-  color: #535bf2;
+  color: #174a35;
 }
 
 h1 {
@@ -59,10 +59,11 @@ button {
   font-family: inherit;
   background-color: #f9f9f9;
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: border-color 0.25s, transform 0.2s ease;
 }
 button:hover {
-  border-color: #646cff;
+  border-color: #1f6244;
+  transform: translateY(-1px);
 }
 button:focus,
 button:focus-visible {
@@ -72,4 +73,3 @@ button:focus-visible {
 .card {
   padding: 2em;
 }
-
