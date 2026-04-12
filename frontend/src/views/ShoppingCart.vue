@@ -10,20 +10,28 @@
 
     <div v-else class="cart-items">
       <div
-        v-for="(item, index) in cartItems"
-        :key="item.id"
-        class="cart-item-card"
+          v-for="(item, index) in cartItems"
+          :key="item.id"
+          class="cart-item-card"
       >
         <div class="cart-item-header">
           <div class="item-type-badge">
-            {{ item.itemType === 'PRODUCT' ? '🎁 套餐' : '🎫 景区门票' }}
+            {{ item.itemType === 'PRODUCT' || item.itemType === 'PACKAGE' ? '🎁 套餐' : '🎫 景区门票' }}
           </div>
           <h3>{{ item.itemName }}</h3>
           <button class="remove-btn" @click="removeItem(index)">×</button>
         </div>
 
-        <div v-if="item.imageUrl" class="cart-item-image">
-          <img :src="getImageUrl(item.imageUrl)" :alt="item.itemName">
+        <div class="cart-item-image">
+          <img
+              v-if="item.imageUrl && !item.imageError"
+              :src="getImageUrl(item.imageUrl)"
+              :alt="item.itemName"
+              @error="markImageError(item.id)"
+          >
+          <div v-else class="cart-image-placeholder">
+            {{ item.itemType === 'PRODUCT' || item.itemType === 'PACKAGE' ? '套餐图片' : '景区图片' }}
+          </div>
         </div>
 
         <div class="cart-item-price">
@@ -76,11 +84,17 @@ export default {
   computed: {
     totalPrice() {
       return this.cartItems
-        .reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity || 0), 0)
-        .toFixed(2)
+          .reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity || 0), 0)
+          .toFixed(2)
     },
     totalQuantity() {
       return this.cartItems.reduce((sum, item) => sum + item.quantity, 0)
+    },
+    backendBaseUrl() {
+      const apiBase = apiClient?.defaults?.baseURL || ''
+      if (!apiBase) return window.location.origin
+      if (/^https?:\/\//i.test(apiBase)) return apiBase.replace(/\/$/, '')
+      return window.location.origin
     }
   },
   async created() {
@@ -93,10 +107,36 @@ export default {
     window.removeEventListener('storage', this.handleStorageChange)
   },
   methods: {
-    getImageUrl(imageUrl) {
+    normalizeImagePath(imageUrl) {
       if (!imageUrl) return ''
-      if (imageUrl.startsWith('http')) return imageUrl
-      return `http://localhost:8080${imageUrl}`
+      let value = String(imageUrl).trim()
+      if (!value) return ''
+      if (/^https?:\/\//i.test(value)) return value
+
+      value = value.replace(/\\/g, '/')
+      value = value.replace(/^classpath:/i, '')
+      value = value.replace(/^src\/main\//i, '')
+      value = value.replace(/^public\//i, '')
+      value = value.replace(/^static\//i, '')
+      value = value.replace(/^resources\//i, '')
+
+      const imagesIndex = value.lastIndexOf('images/')
+      if (imagesIndex >= 0) {
+        value = value.substring(imagesIndex)
+      }
+
+      return value.startsWith('/') ? value : `/${value}`
+    },
+
+    getImageUrl(imageUrl) {
+      const normalized = this.normalizeImagePath(imageUrl)
+      if (!normalized) return ''
+      if (/^https?:\/\//i.test(normalized)) return normalized
+      return `${this.backendBaseUrl}${normalized}`
+    },
+
+    markImageError(id) {
+      this.cartItems = this.cartItems.map(item => item.id === id ? { ...item, imageError: true } : item)
     },
 
     async loadUserInfo() {
@@ -134,16 +174,23 @@ export default {
       if (this.userId == null || Number.isNaN(this.userId)) return
 
       try {
-        const response = await apiClient.get(`/api/cart?userId=${this.userId}`)
+        let response
+        try {
+          response = await apiClient.get('/api/cart/me')
+        } catch (e) {
+          response = await apiClient.get(`/api/cart?userId=${this.userId}`)
+        }
+
         this.cartItems = (response.data || []).map(item => ({
           id: item.id,
-          itemType: item.itemType || 'PRODUCT',
+          itemType: String(item.itemType || 'PRODUCT').toUpperCase(),
           itemId: item.itemId,
-          itemName: item.itemName || item.productName,
+          itemName: item.itemName || item.name || item.productName || '未命名商品',
           price: Number(item.price || 0),
-          imageUrl: item.imageUrl,
+          imageUrl: item.imageUrl || item.image || '',
           features: item.features,
-          quantity: item.quantity || 1
+          quantity: item.quantity || 1,
+          imageError: false
         }))
         localStorage.removeItem('shoppingCart')
       } catch (error) {
@@ -225,6 +272,7 @@ export default {
   }
 }
 </script>
+
 <style scoped>
 .shopping-cart-container {
   width: 100%;
@@ -234,7 +282,6 @@ export default {
   min-height: calc(100vh - 60px);
   box-sizing: border-box;
 }
-
 .page-title {
   font-size: 28px;
   color: #667eea;
@@ -243,7 +290,6 @@ export default {
   margin-top: 0;
   padding-top: 0;
 }
-
 .empty-cart {
   text-align: center;
   padding: 60px 20px;
@@ -251,227 +297,123 @@ export default {
   border-radius: 10px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
 }
-
-.empty-cart-icon {
-  font-size: 80px;
-  margin-bottom: 20px;
-}
-
-.empty-cart p {
-  font-size: 18px;
-  color: #999;
-  margin-bottom: 30px;
-}
-
+.empty-cart-icon { font-size: 80px; margin-bottom: 20px; }
+.empty-cart p { font-size: 18px; color: #666; margin-bottom: 30px; }
 .back-btn {
-  padding: 12px 40px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 5px;
+  padding: 12px 24px;
+  border-radius: 25px;
   cursor: pointer;
   font-size: 16px;
-  transition: transform 0.3s ease;
-}
-
-.back-btn:hover {
-  transform: translateY(-2px);
-}
-
-.cart-items {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  padding-bottom: 20px;
-  padding-top: 10px;
-}
-
-.cart-item-card {
-  background: white;
-  border-radius: 10px;
-  padding: 25px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  position: relative;
-  z-index: 1;
-}
-
-.cart-item-header {
-  display: flex;
-  justify-content: space-between;
+  display: inline-flex;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 2px solid #f0f0f0;
-  flex-wrap: wrap;
-  gap: 10px;
+  justify-content: center;
+  line-height: 1.2;
+  box-sizing: border-box;
 }
-
+.cart-items { display: flex; flex-direction: column; gap: 20px; }
+.cart-item-card {
+  background: white; border-radius: 15px; padding: 20px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+.cart-item-header {
+  display: flex; align-items: center; gap: 15px; margin-bottom: 15px;
+}
 .item-type-badge {
-  padding: 5px 12px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: bold;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: #f0f8ff; color: #667eea; padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold;
 }
-
-.cart-item-header h3 {
-  color: #333;
-  font-size: 22px;
-  margin: 0;
-  flex: 1;
-}
-
+.cart-item-header h3 { flex: 1; margin: 0; color: #333; font-size: 20px; }
 .remove-btn {
+  background: #ff4757;
+  color: white;
+  border: none;
   width: 30px;
   height: 30px;
-  border: none;
-  background: #f44336;
-  color: white;
   border-radius: 50%;
-  font-size: 20px;
   cursor: pointer;
-  display: flex;
+  font-size: 18px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.3s ease;
+  line-height: 1;
+  padding: 0;
+  box-sizing: border-box;
 }
-
-.remove-btn:hover {
-  transform: scale(1.1);
-}
-
 .cart-item-image {
-  width: 100%;
-  max-height: 200px;
-  overflow: hidden;
-  border-radius: 8px;
-  margin-bottom: 15px;
+  margin-bottom: 15px; width: 100%; height: 220px; border-radius: 10px; overflow: hidden; background: #f5f7fa;
 }
-
 .cart-item-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+  width: 100%; height: 100%; object-fit: cover; display: block;
 }
-
-.cart-item-price {
-  text-align: center;
-  margin-bottom: 15px;
+.cart-image-placeholder {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #666; background: linear-gradient(135deg, #f5f7fa, #e4eaf3);
 }
-
-.currency {
-  font-size: 20px;
-  color: #f44336;
-  vertical-align: top;
-}
-
-.amount {
-  font-size: 36px;
-  color: #f44336;
-  font-weight: bold;
-}
-
+.cart-item-price { margin-bottom: 10px; text-align: center; }
+.currency { font-size: 24px; color: #e74c3c; }
+.amount { font-size: 36px; font-weight: bold; color: #e74c3c; }
 .quantity-control {
   display: flex;
-  justify-content: center;
   align-items: center;
-  gap: 15px;
-  margin-bottom: 15px;
+  justify-content: center;
+  gap: 16px;
+  margin: 18px 0 14px;
 }
-
 .quantity-btn {
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  width: 44px;
+  height: 44px;
+  border: 2px solid #667eea;
+  background: #fff;
+  color: #667eea;
   border-radius: 50%;
-  font-size: 20px;
   cursor: pointer;
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.3s ease;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
-
-.quantity-btn:hover {
-  transform: scale(1.1);
-}
-
 .quantity-value {
-  font-size: 20px;
-  font-weight: bold;
-  color: #333;
-  min-width: 40px;
-  text-align: center;
-}
-
-.cart-item-total {
-  text-align: center;
-  font-size: 16px;
-  font-weight: bold;
-  color: #667eea;
-  margin-bottom: 15px;
-}
-
-.cart-item-features {
-  padding: 0;
-  margin: 0;
-}
-
-.cart-item-features p {
-  padding: 10px 0;
-  color: #666;
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.cart-summary {
-  background: white;
-  border-radius: 10px;
-  padding: 25px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-  margin-top: 20px;
-}
-
-.summary-row {
+  width: 48px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 12px 0;
-  font-size: 16px;
-  color: #666;
-  border-bottom: 1px solid #f0f0f0;
-}
-
-.summary-row.total {
-  font-size: 18px;
-  font-weight: bold;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: 700;
   color: #333;
-  border-bottom: 2px solid #667eea;
-  margin-bottom: 20px;
+  line-height: 1;
+  text-align: center;
 }
-
-.total-amount {
-  color: #f44336;
-  font-size: 24px;
+.cart-item-total { text-align: center; font-size: 18px; font-weight: bold; color: #667eea; margin-bottom: 15px; }
+.cart-item-features {
+  background: #f8f9fa; padding: 15px; border-radius: 8px; border-left: 4px solid #667eea;
 }
-
+.cart-item-features p { margin: 0; color: #666; line-height: 1.5; }
+.cart-summary {
+  background: white; border-radius: 15px; padding: 25px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); position: sticky; bottom: 20px;
+}
+.summary-row { display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 18px; }
+.summary-row.total { border-top: 2px solid #eee; padding-top: 15px; font-weight: bold; font-size: 24px; }
+.total-amount { color: #e74c3c; }
 .checkout-btn {
   width: 100%;
-  padding: 14px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
   color: white;
   border: none;
-  border-radius: 5px;
-  cursor: pointer;
+  padding: 15px;
+  border-radius: 25px;
   font-size: 18px;
   font-weight: bold;
-  transition: transform 0.3s ease;
-}
-
-.checkout-btn:hover {
-  transform: translateY(-2px);
+  cursor: pointer;
+  margin-top: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.2;
+  box-sizing: border-box;
 }
 </style>
