@@ -1,17 +1,17 @@
 <template>
   <div class="shopping-cart-container">
     <h2 class="page-title">🛒 购物车</h2>
-    
+
     <div v-if="cartItems.length === 0" class="empty-cart">
       <div class="empty-cart-icon">🛒</div>
       <p>购物车空空如也</p>
       <button class="back-btn" @click="goToSubscription">去逛逛</button>
     </div>
-    
+
     <div v-else class="cart-items">
-      <div 
-        v-for="(item, index) in cartItems" 
-        :key="item.id" 
+      <div
+        v-for="(item, index) in cartItems"
+        :key="item.id"
         class="cart-item-card"
       >
         <div class="cart-item-header">
@@ -21,26 +21,31 @@
           <h3>{{ item.itemName }}</h3>
           <button class="remove-btn" @click="removeItem(index)">×</button>
         </div>
+
         <div v-if="item.imageUrl" class="cart-item-image">
           <img :src="getImageUrl(item.imageUrl)" :alt="item.itemName">
         </div>
+
         <div class="cart-item-price">
           <span class="currency">¥</span>
           <span class="amount">{{ item.price }}</span>
         </div>
+
         <div class="quantity-control">
           <button class="quantity-btn" @click="updateQuantity(item, -1)">-</button>
           <span class="quantity-value">{{ item.quantity }}</span>
           <button class="quantity-btn" @click="updateQuantity(item, 1)">+</button>
         </div>
+
         <div class="cart-item-total">
           小计：¥{{ (item.price * item.quantity).toFixed(2) }}
         </div>
+
         <div v-if="item.features" class="cart-item-features">
           <p>{{ item.features }}</p>
         </div>
       </div>
-      
+
       <div class="cart-summary">
         <div class="summary-row">
           <span>商品数量：</span>
@@ -64,20 +69,28 @@ export default {
   data() {
     return {
       cartItems: [],
-      userId: null
+      userId: null,
+      username: ''
     }
   },
   computed: {
     totalPrice() {
-      return this.cartItems.reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity || 0), 0).toFixed(2)
+      return this.cartItems
+        .reduce((sum, item) => sum + (parseFloat(item.price) * item.quantity || 0), 0)
+        .toFixed(2)
     },
     totalQuantity() {
       return this.cartItems.reduce((sum, item) => sum + item.quantity, 0)
     }
   },
-  created() {
-    // 获取当前用户信息
-    this.loadUserInfo()
+  async created() {
+    await this.loadUserInfo()
+  },
+  mounted() {
+    window.addEventListener('storage', this.handleStorageChange)
+  },
+  beforeUnmount() {
+    window.removeEventListener('storage', this.handleStorageChange)
   },
   methods: {
     getImageUrl(imageUrl) {
@@ -85,107 +98,133 @@ export default {
       if (imageUrl.startsWith('http')) return imageUrl
       return `http://localhost:8080${imageUrl}`
     },
+
     async loadUserInfo() {
-      try {
-        // 尝试从后端获取用户信息
-        const response = await apiClient.get('/api/auth/current-user')
-        this.userId = response.data.id
-        localStorage.setItem('userId', response.data.id)
-        localStorage.setItem('username', response.data.username)
-        this.loadCart()
-      } catch (error) {
-        console.error('获取用户信息失败:', error)
-        // 如果获取失败，尝试从 localStorage 获取
-        const savedUserId = localStorage.getItem('userId')
-        if (savedUserId) {
-          this.userId = parseInt(savedUserId)
-          this.loadCart()
-        }
+      const savedUserId = localStorage.getItem('userId')
+      const savedUsername = localStorage.getItem('username')
+
+      if (savedUserId) {
+        this.userId = Number(savedUserId)
       }
+      if (savedUsername) {
+        this.username = savedUsername
+      }
+
+      try {
+        const response = await apiClient.get('/api/auth/current-user')
+        if (response && response.data) {
+          this.userId = response.data.id != null ? Number(response.data.id) : this.userId
+          this.username = response.data.username || this.username || ''
+
+          if (this.userId != null && !Number.isNaN(this.userId)) {
+            localStorage.setItem('userId', String(this.userId))
+          }
+          if (this.username) {
+            localStorage.setItem('username', this.username)
+          }
+        }
+      } catch (error) {
+        console.error('获取用户信息失败，已尝试使用本地缓存:', error)
+      }
+
+      await this.loadCart()
     },
+
     async loadCart() {
-      if (!this.userId) return
+      if (this.userId == null || Number.isNaN(this.userId)) return
+
       try {
         const response = await apiClient.get(`/api/cart?userId=${this.userId}`)
-        this.cartItems = response.data.map(item => ({
+        this.cartItems = (response.data || []).map(item => ({
           id: item.id,
           itemType: item.itemType || 'PRODUCT',
           itemId: item.itemId,
           itemName: item.itemName || item.productName,
-          price: item.price,
+          price: Number(item.price || 0),
           imageUrl: item.imageUrl,
           features: item.features,
           quantity: item.quantity || 1
         }))
-        // 清除旧的 localStorage 数据
         localStorage.removeItem('shoppingCart')
       } catch (error) {
         console.error('加载购物车失败:', error)
       }
     },
+
     async updateQuantity(item, delta) {
       const newQuantity = item.quantity + delta
       if (newQuantity < 1) return
-      
+
       try {
         await apiClient.put(`/api/cart/${item.id}/quantity?quantity=${newQuantity}`)
         item.quantity = newQuantity
+        localStorage.setItem('cartRefreshAt', String(Date.now()))
       } catch (error) {
         console.error('更新数量失败:', error)
         alert('更新失败，请重试')
       }
     },
+
     async removeItem(index) {
       const item = this.cartItems[index]
       try {
         if (item.id) {
-          // 从数据库删除
           await apiClient.delete(`/api/cart/${item.id}?userId=${this.userId}`)
         }
         this.cartItems.splice(index, 1)
+        localStorage.setItem('cartRefreshAt', String(Date.now()))
       } catch (error) {
         console.error('删除商品失败:', error)
         alert('删除失败，请重试')
       }
     },
+
     async checkout() {
       console.log('结算商品:', this.cartItems)
       try {
-        // 调用后端创建订单
         const orderData = {
           userId: this.userId,
           items: this.cartItems,
           totalAmount: this.totalPrice
         }
-        // TODO: 调用创建订单的 API
-        // await apiClient.post('/orders', orderData)
+        console.log('待创建订单数据:', orderData)
         alert('跳转到支付页面，总计：¥' + this.totalPrice)
       } catch (error) {
         console.error('创建订单失败:', error)
         alert('创建订单失败，请重试')
       }
     },
+
     async clearCart() {
       try {
         await apiClient.delete(`/api/cart?userId=${this.userId}`)
         this.cartItems = []
+        localStorage.setItem('cartRefreshAt', String(Date.now()))
       } catch (error) {
         console.error('清空购物车失败:', error)
       }
     },
+
     goToSubscription() {
       this.$router.push('/subscription')
+    },
+
+    handleStorageChange(event) {
+      if (event.key === 'cartRefreshAt') {
+        this.loadCart()
+      }
+      if (event.key === 'userId' || event.key === 'username') {
+        this.loadUserInfo()
+      }
     }
   },
   watch: {
-    // 监听路由变化，刷新购物车数据
-    '$route'(to, from) {
+    '$route'() {
       this.loadCart()
     }
   }
 }
 </script>
-
 <style scoped>
 .shopping-cart-container {
   width: 100%;
