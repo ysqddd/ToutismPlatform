@@ -8,8 +8,10 @@ import org.example.toutismplatform.repository.RolePermissionRepository;
 import org.example.toutismplatform.repository.RoleRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Collections;
 import java.util.List;
 
 @RestController
@@ -101,15 +103,20 @@ public class PermissionController {
 
     // 为角色分配权限
     @PostMapping("/roles/{roleId}/permissions")
+    @Transactional
     public ResponseEntity<Void> assignPermissionsToRole(@PathVariable Long roleId, @RequestBody RolePermissionRequest request) {
         Role role = roleRepository.findById(roleId)
                 .orElseThrow(() -> new RuntimeException("Role not found"));
 
         // 先删除角色原有的权限
         rolePermissionRepository.deleteByRoleId(roleId);
+        rolePermissionRepository.flush();
 
-        // 为角色分配新的权限
-        for (Long permissionId : request.getPermissionIds()) {
+        List<Long> permissionIds = request.getPermissionIds() == null
+                ? Collections.emptyList()
+                : request.getPermissionIds();
+
+        for (Long permissionId : permissionIds) {
             Permission permission = permissionRepository.findById(permissionId)
                     .orElseThrow(() -> new RuntimeException("Permission not found"));
 
