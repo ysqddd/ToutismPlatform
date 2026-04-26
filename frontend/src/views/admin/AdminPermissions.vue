@@ -162,12 +162,14 @@ export default {
       showAssignPermissionsModalFlag: false,
       isSubmitting: false,
       formData: {
+        id: null,
         code: '',
         name: '',
         description: '',
         module: ''
       },
       roleFormData: {
+        id: null,
         name: '',
         description: ''
       },
@@ -200,6 +202,7 @@ export default {
     },
     editPermission(permission) {
       this.formData = {
+        id: permission.id,
         code: permission.code,
         name: permission.name,
         description: permission.description,
@@ -218,6 +221,9 @@ export default {
           alert('添加成功')
         } else {
           // 后端API支持更新权限
+          if (!this.formData.id) {
+            throw new Error('Missing permission id')
+          }
           await apiClient.put(`/api/permissions/${this.formData.id}`, this.formData)
           alert('更新成功')
         }
@@ -246,6 +252,7 @@ export default {
       this.showAddModal = false
       this.showEditModal = false
       this.formData = {
+        id: null,
         code: '',
         name: '',
         description: '',
@@ -254,6 +261,7 @@ export default {
     },
     editRole(role) {
       this.roleFormData = {
+        id: role.id,
         name: role.name,
         description: role.description
       }
@@ -270,6 +278,9 @@ export default {
           alert('添加成功')
         } else {
           // 后端API支持更新角色
+          if (!this.roleFormData.id) {
+            throw new Error('Missing role id')
+          }
           await apiClient.put(`/api/permissions/roles/${this.roleFormData.id}`, this.roleFormData)
           alert('更新成功')
         }
@@ -298,6 +309,7 @@ export default {
       this.showAddRoleModal = false
       this.showEditRoleModal = false
       this.roleFormData = {
+        id: null,
         name: '',
         description: ''
       }
