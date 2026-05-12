@@ -1,6 +1,6 @@
 package org.example.toutismplatform.service;
 
-import dev.langchain4j.model.ollama.OllamaChatModel;
+import dev.langchain4j.model.chat.ChatLanguageModel;
 import org.example.toutismplatform.entity.LargeScenicArea;
 import org.example.toutismplatform.entity.Product;
 import org.example.toutismplatform.entity.SmallScenicSpot;
@@ -26,13 +26,13 @@ public class RagService {
     private static final int ALL_SCENIC_STOPS = Integer.MAX_VALUE;
     private static final String UNKNOWN_SCENIC_REPLY = "开封目前没有这个景点，或者当前系统还没有录入这个景点。";
     private static final String NEED_TOURISM_QUERY_REPLY = "请告诉我你想了解的开封景点、路线或游玩偏好，我可以帮你介绍景点或规划路线。";
-    private static final Pattern SCENIC_NAME_PATTERN = Pattern.compile("[\\u4e00-\\u9fa5A-Za-z]{2,20}(?:景区|景点|公园|寺|桥|码头|门|楼|府|祠|台|城|站|中心|夜市|街|馆|园|林|树林)");
+    private static final Pattern SCENIC_NAME_PATTERN = Pattern.compile("[\\u4e00-\\u9fa5A-Za-z]{2,20}(?:景区|景点|公园|寺|塔|桥|码头|门|楼|府|祠|台|城|站|中心|夜市|街|馆|园|林|树林)");
     private static final Map<String, Map<String, Object>> PENDING_CART_CONTEXT_BY_USER = new ConcurrentHashMap<>();
     private static final ThreadLocal<Long> EXPLICIT_USER_ID = new ThreadLocal<>();
     private static final ThreadLocal<String> EXPLICIT_USERNAME = new ThreadLocal<>();
 
     @Autowired
-    private OllamaChatModel ollamaChatModel;
+    private ChatLanguageModel chatModel;
 
     @Autowired
     private LargeScenicAreaRepository largeScenicAreaRepository;
@@ -75,116 +75,51 @@ public class RagService {
         List<LargeScenicArea> largeAreas = largeScenicAreaRepository.findAll();
         List<SmallScenicSpot> smallSpots = smallScenicSpotRepository.findAll();
         LinkedHashSet<String> allowedNames = buildAllowedScenicNameWhitelist(largeAreas, smallSpots);
+        TourismIntentClassification modelIntent = classifyTourismIntent(query, allowedNames);
 
         if (isUnrecordedSpecificScenicQuery(query, allowedNames)) {
             return UNKNOWN_SCENIC_REPLY;
         }
 
-        if (isPackageRecommendationQuery(query)) {
-            return sanitizeAiAnswer(buildPackageRecommendationAnswer());
+        boolean packageRecommendationQuery = isPackageRecommendationQuery(query);
+        boolean pathPlanningQuery = isPathPlanningQuery(query);
+        boolean foodRecommendationQuery = isFoodRecommendationQuery(query);
+        boolean generalScenicListQuery = isGeneralScenicListQuery(query);
+
+        if (packageRecommendationQuery || modelIntent.is(TourismIntentType.PACKAGE_RECOMMENDATION)) {
+            return polishFactAnswer(query, buildPackageRecommendationFacts(), allowedNames);
         }
 
-        if (isPathPlanningQuery(query)) {
-            Map<String, Object> routeCartContext = buildRouteCartContext(query);
+        if (pathPlanningQuery || modelIntent.is(TourismIntentType.ROUTE_PLAN)) {
+            Map<String, Object> routeCartContext = buildRouteCartContext(query, modelIntent);
             rememberPendingCartContext(currentUserKey, routeCartContext);
             return sanitizeAiAnswer(String.valueOf(routeCartContext.getOrDefault("answer", "暂时无法生成路线。")));
         }
 
-        if (isFoodRecommendationQuery(query)) {
-            return sanitizeAiAnswer(buildFoodRecommendationAnswer(query, largeAreas));
+        if (foodRecommendationQuery || modelIntent.is(TourismIntentType.FOOD_RECOMMENDATION)) {
+            return polishFactAnswer(query, buildFoodRecommendationFacts(largeAreas), allowedNames);
         }
 
-        if (isGeneralScenicListQuery(query)) {
+        if (generalScenicListQuery || modelIntent.is(TourismIntentType.GENERAL_SCENIC_LIST)) {
+            // 有明确偏好标签（如老人友好）的信息查询，直接返回景点介绍，不附加购物车方案
+            Set<String> preferenceTags = detectRelevantTags(query);
+            if (!preferenceTags.isEmpty()) {
+                String factAnswer = buildGeneralScenicRecommendationFacts(largeAreas, query);
+                return polishFactAnswer(query, factAnswer, allowedNames);
+            }
             Map<String, Object> recommendationContext = buildGeneralRecommendationCartContext(query, largeAreas);
             rememberPendingCartContext(currentUserKey, recommendationContext);
-            return sanitizeAiAnswer(String.valueOf(recommendationContext.getOrDefault("answer", buildGeneralScenicListAnswer(query, largeAreas))));
+            String factAnswer = String.valueOf(recommendationContext.getOrDefault("answer", buildGeneralScenicRecommendationFacts(largeAreas, query)));
+            return polishFactAnswer(query, factAnswer, allowedNames);
         }
 
-        if (isInsufficientOrUnsupportedTourismQuery(query, allowedNames)) {
+        if (isInsufficientOrUnsupportedTourismQuery(query, allowedNames)
+                && !modelIntent.is(TourismIntentType.SCENIC_DETAIL)
+                && !modelIntent.is(TourismIntentType.ROUTE_PLAN)) {
             return NEED_TOURISM_QUERY_REPLY;
         }
-        Map<Long, String> areaNameMap = new HashMap<>();
-        for (LargeScenicArea area : largeAreas) {
-            if (area != null && area.getId() != null) {
-                areaNameMap.put(area.getId(), area.getName());
-            }
-        }
-
-        StringBuilder context = new StringBuilder();
-        context.append("你是一名中文导游，负责回答游客关于景点的问题。\n\n");
-        context.append("说明：以下内容必须严格依据现有景点资料回答；如果用户提到的景点并不存在，必须明确回答“开封市并没有这个景点”；如果只是缺少某个细节，就说明“暂时没有查到这方面的介绍”，不得猜测。\n\n");
-        context.append("景点知识库：\n");
-        context.append("重要提示：所有收费景区都需要通过免费的公共大门或游客中心进入，这些公共节点不收门票。\n");
-        context.append("重要提示：以下信息里如果存在系统内部字段，只能用于理解，不允许在回答中直接输出。\n");
-        context.append("重要提示：只允许使用知识库中真实存在的大景区名称和小景点名称，禁止编造别名、英文名、传说名称或不存在的景点。\n\n");
-
-        for (LargeScenicArea area : largeAreas) {
-            context.append("大景区/地点：").append(area.getName()).append("\n");
-            context.append("描述：").append(defaultText(area.getDescription())).append("\n");
-            context.append("位置：").append(defaultText(area.getLocation())).append("\n");
-            context.append("开放时间：").append(defaultText(area.getOpeningHours())).append("\n");
-            context.append("建议游览时长：").append(safeInt(area.getRecommendedVisitDuration())).append("分钟\n");
-            context.append(buildAreaPriceText(area)).append("\n");
-            context.append("标签：").append(defaultText(area.getTags())).append("\n");
-            context.append("偏好特征：自然=").append(safeDecimal(area.getNatureScore()))
-                    .append("，人文=").append(safeDecimal(area.getCultureScore()))
-                    .append("，拍照=").append(safeDecimal(area.getPhotographyScore()))
-                    .append("，老人友好=").append(safeDecimal(area.getElderlyFriendlyScore()))
-                    .append("，亲子=").append(safeDecimal(area.getFamilyFriendlyScore()))
-                    .append("，休闲=").append(safeDecimal(area.getLeisureScore()))
-                    .append("，餐饮便利=").append(safeDecimal(area.getFoodConvenienceScore()))
-                    .append("，卫生间便利=").append(safeDecimal(area.getRestroomConvenienceScore()))
-                    .append("，热门=").append(safeDecimal(area.getPopularityScore()))
-                    .append("，体力消耗等级=").append(safeInt(area.getIntensityLevel()))
-                    .append("，拥挤等级=").append(safeInt(area.getCrowdLevel()))
-                    .append("\n\n");
-        }
-
-        for (SmallScenicSpot spot : smallSpots) {
-            context.append("小景点/设施：").append(spot.getName()).append("\n");
-            String parentAreaName = areaNameMap.get(spot.getLargeAreaId());
-            if (parentAreaName != null && !parentAreaName.isBlank()) {
-                context.append("所属大景区：").append(parentAreaName).append("\n");
-            }
-            context.append("描述：").append(defaultText(spot.getDescription())).append("\n");
-            context.append("建议游览时长：").append(safeInt(spot.getVisitingDuration())).append("分钟\n");
-            context.append("标签：").append(defaultText(spot.getTags())).append("\n");
-            context.append("偏好特征：自然=").append(safeDecimal(spot.getNatureScore()))
-                    .append("，人文=").append(safeDecimal(spot.getCultureScore()))
-                    .append("，拍照=").append(safeDecimal(spot.getPhotographyScore()))
-                    .append("，老人友好=").append(safeDecimal(spot.getElderlyFriendlyScore()))
-                    .append("，亲子=").append(safeDecimal(spot.getFamilyFriendlyScore()))
-                    .append("，休息便利=").append(safeDecimal(spot.getRestConvenienceScore()))
-                    .append("，体力消耗等级=").append(safeInt(spot.getIntensityLevel()))
-                    .append("，排队等级=").append(safeInt(spot.getQueueLevel()))
-                    .append("\n\n");
-        }
-
-        if (largeAreas.isEmpty() && smallSpots.isEmpty()) {
-            context.append("当前知识库中暂无景点信息。\n\n");
-        }
-
-        String enhancedQuery = context +
-                "允许出现的真实景点名称：" + buildAllowedNameSummary(allowedNames) +
-                "\n\n游客问题：" + query +
-                "\n\n请以导游身份回答，要求：\n" +
-                "1. 只能基于以上景区资料和真实景点名称回答，不得补充现有资料里没有的景点、树林、建筑、别名或传说内容\n" +
-                "2. 如果用户提到的景点不在已知景点范围内，就直接回答“开封市并没有这个景点”；如果只是缺少某个细节，再说明“暂时没有查到这方面的介绍”，不要猜测，不要编造\n" +
-                "3. 如涉及公共大门、车站、夜市等节点，要说明它们可作为路线起终点或补给点\n" +
-                "4. 不要提及编程、数据库、接口、字段名、内部编号、内部ID等实现细节\n" +
-                "5. 不要输出任何类似 ID 3、景区ID、所属大景区ID、areaId、pathDetails、recommendedAreaIds、isAreaType、transportMode 之类的内部信息\n" +
-                "6. 若用户给出偏好，如少走路、亲子、拍照、人文、赶时间，要显式体现在建议中\n" +
-                "7. 优先结合景区标签、适合人群、游览体验和路线顺序给出建议\n" +
-                "8. 必须全部使用简体中文，不得出现英文单词、英文缩写、拼音、外文别名或中英混写表达\n" +
-                "9. 景区的价格一般表示门票或票价参考；饭店、餐馆、小吃店等餐饮地点的价格表示人均消费参考，不要说成门票\n" +
-                "10. 夜市、车站、大门、游客中心等开放型公共节点，如果价格为 0，表示免费开放或无固定消费\n" +
-                "11. 只用纯文本回答，不要使用 Markdown 格式\n" +
-                "12. 不要出现 #、*、-、>、`、--- 等符号\n" +
-                "13. 不要写 Markdown 标题，不要写项目符号列表\n" +
-                "14. 直接用自然段输出，分段时不要加任何特殊符号";
-
-        String rawAnswer = ollamaChatModel.generate(enhancedQuery);
-        return sanitizeAndValidateGeneratedAnswer(rawAnswer, query, largeAreas, smallSpots, context.toString(), allowedNames);
+        String factAnswer = buildKnowledgeOnlyFallbackAnswer(query, largeAreas, smallSpots);
+        return polishFactAnswer(query, factAnswer, allowedNames);
     }
 
 
@@ -198,6 +133,84 @@ public class RagService {
             return username.trim();
         }
         return null;
+    }
+
+    private TourismIntentClassification classifyTourismIntent(String query, Set<String> allowedNames) {
+        if (chatModel == null || query == null || query.isBlank()) {
+            return TourismIntentClassification.unknown();
+        }
+        try {
+            String response = chatModel.generate(buildIntentClassificationPrompt(query, allowedNames));
+            return parseTourismIntentClassification(response);
+        } catch (Exception ignored) {
+            return TourismIntentClassification.unknown();
+        }
+    }
+
+    private String buildIntentClassificationPrompt(String query, Set<String> allowedNames) {
+        return "你只负责识别旅游问答意图，不回答问题，不编造事实。\n"
+                + "请从这些意图中选择一个：ROUTE_PLAN、SCENIC_DETAIL、PACKAGE_RECOMMENDATION、FOOD_RECOMMENDATION、GENERAL_SCENIC_LIST、UNSUPPORTED、UNKNOWN。\n"
+                + "如果用户要路线、游玩方案、如何游玩、几个景区游览，选 ROUTE_PLAN。\n"
+                + "如果用户问单个景区介绍、门票、开放时间、园内怎么玩，选 SCENIC_DETAIL 或 ROUTE_PLAN，涉及顺序时优先 ROUTE_PLAN。\n"
+                + "如果用户问套餐、套票、组合票、省钱组合，选 PACKAGE_RECOMMENDATION。\n"
+                + "如果用户问美食、饭店、小吃、吃什么，选 FOOD_RECOMMENDATION。\n"
+                + "如果用户泛问有哪些景点、更多景区、推荐景点，选 GENERAL_SCENIC_LIST 或 ROUTE_PLAN，要求方案时选 ROUTE_PLAN。\n"
+                + "只输出四行，不要解释：\n"
+                + "intent=意图\n"
+                + "scenicName=如果有明确且已知景区名就输出，否则留空\n"
+                + "maxStops=如果用户要求景区数量就输出数字，否则输出0\n"
+                + "reason=不超过15字\n\n"
+                + "已知景区和点位名称：" + buildAllowedNameSummary(allowedNames) + "\n"
+                + "用户问题：" + query;
+    }
+
+    private TourismIntentClassification parseTourismIntentClassification(String response) {
+        if (response == null || response.isBlank()) {
+            return TourismIntentClassification.unknown();
+        }
+        TourismIntentType intentType = parseIntentType(extractIntentField(response, "intent"));
+        String scenicName = extractIntentField(response, "scenicName");
+        int maxStops = safeParseInt(extractIntentField(response, "maxStops"), 0);
+        return new TourismIntentClassification(intentType, scenicName, maxStops);
+    }
+
+    private String extractIntentField(String response, String fieldName) {
+        Matcher matcher = Pattern.compile("(?im)^\\s*\"?" + Pattern.quote(fieldName) + "\"?\\s*[:=]\\s*\"?([^\"\\r\\n,}]+)").matcher(response);
+        if (matcher.find()) {
+            return matcher.group(1).trim();
+        }
+        return "";
+    }
+
+    private TourismIntentType parseIntentType(String value) {
+        if (value == null || value.isBlank()) {
+            return TourismIntentType.UNKNOWN;
+        }
+        String normalized = normalize(value).toUpperCase(Locale.ROOT);
+        for (TourismIntentType type : TourismIntentType.values()) {
+            if (type.name().equals(normalized)) {
+                return type;
+            }
+        }
+        if (containsAny(normalized, "路线", "方案", "游玩", "行程")) {
+            return TourismIntentType.ROUTE_PLAN;
+        }
+        if (containsAny(normalized, "套餐", "套票", "组合")) {
+            return TourismIntentType.PACKAGE_RECOMMENDATION;
+        }
+        if (containsAny(normalized, "美食", "餐饮", "吃")) {
+            return TourismIntentType.FOOD_RECOMMENDATION;
+        }
+        if (containsAny(normalized, "景点列表", "推荐景点", "更多景区")) {
+            return TourismIntentType.GENERAL_SCENIC_LIST;
+        }
+        if (containsAny(normalized, "详情", "介绍", "门票", "开放")) {
+            return TourismIntentType.SCENIC_DETAIL;
+        }
+        if (containsAny(normalized, "不支持", "无关")) {
+            return TourismIntentType.UNSUPPORTED;
+        }
+        return TourismIntentType.UNKNOWN;
     }
 
     private boolean isCartConfirmationQuery(String query, String currentUserKey) {
@@ -241,7 +254,7 @@ public class RagService {
         if (currentUserKey == null || currentUserKey.isBlank()) {
             return "谢谢你的认可，这份推荐我已经先帮你记下了。当前还不能直接替你完成加购，请在请求里带上 userId 或 username 后再确认一次。";
         }
-        Map<String, Object> pendingContext = PENDING_CART_CONTEXT_BY_USER.get(currentUserKey);
+        Map<String, Object> pendingContext = PENDING_CART_CONTEXT_BY_USER.remove(currentUserKey);
         if (pendingContext == null || pendingContext.isEmpty()) {
             return "谢谢你的认可。不过我暂时没有找到你刚刚确认的方案，请先让我为你推荐一条路线或一组景点。";
         }
@@ -289,7 +302,7 @@ public class RagService {
 
     private Map<String, Object> buildGeneralRecommendationCartContext(String query, List<LargeScenicArea> largeAreas) {
         Map<String, Object> context = new LinkedHashMap<>();
-        String answer = buildGeneralScenicListAnswer(query, largeAreas);
+        String answer = buildGeneralScenicRecommendationFacts(largeAreas, query);
         List<LargeScenicArea> scenicAreas = new ArrayList<>();
         if (largeAreas != null) {
             for (LargeScenicArea area : largeAreas) {
@@ -301,9 +314,24 @@ public class RagService {
         if (scenicAreas.isEmpty() && largeAreas != null) {
             scenicAreas.addAll(largeAreas);
         }
-        scenicAreas.sort(Comparator
-                .comparingDouble((LargeScenicArea area) -> safeDecimal(area.getPopularityScore())).reversed()
-                .thenComparingInt(area -> safeInt(area.getRecommendedVisitDuration())).reversed());
+        Set<String> relevantTags = detectRelevantTags(query);
+        if (relevantTags.isEmpty()) {
+            scenicAreas.sort(Comparator
+                    .comparingDouble((LargeScenicArea area) -> safeDecimal(area.getPopularityScore())).reversed()
+                    .thenComparingInt(area -> safeInt(area.getRecommendedVisitDuration())).reversed());
+        } else {
+            scenicAreas.sort((a, b) -> {
+                int tagCompare = Integer.compare(
+                        countMatchingTags(b.getTags(), relevantTags),
+                        countMatchingTags(a.getTags(), relevantTags)
+                );
+                if (tagCompare != 0) return tagCompare;
+                return Double.compare(
+                        safeDecimal(b.getPopularityScore()),
+                        safeDecimal(a.getPopularityScore())
+                );
+            });
+        }
 
         List<Long> scenicAreaIds = new ArrayList<>();
         for (int i = 0; i < Math.min(6, scenicAreas.size()); i++) {
@@ -323,6 +351,10 @@ public class RagService {
     }
 
     public Map<String, Object> buildRouteCartContext(String query) {
+        return buildRouteCartContext(query, TourismIntentClassification.unknown());
+    }
+
+    private Map<String, Object> buildRouteCartContext(String query, TourismIntentClassification modelIntent) {
         Map<String, Object> context = new LinkedHashMap<>();
         context.put("success", false);
         context.put("query", query);
@@ -346,6 +378,10 @@ public class RagService {
         LargeScenicArea startArea = findAreaByName(locations.get("start"), allAreas);
         LargeScenicArea endArea = findAreaByName(locations.get("end"), allAreas);
         List<LargeScenicArea> mentionedAreas = extractMentionedAreas(query, allAreas);
+        LargeScenicArea modelMentionedArea = findAreaByName(modelIntent.scenicName, allAreas);
+        if (modelMentionedArea != null && mentionedAreas.stream().noneMatch(area -> Objects.equals(area.getId(), modelMentionedArea.getId()))) {
+            mentionedAreas.add(modelMentionedArea);
+        }
 
         if (startArea == null && !mentionedAreas.isEmpty() && normalize(query).contains("从")) {
             startArea = mentionedAreas.get(0);
@@ -356,7 +392,7 @@ public class RagService {
 
         Map<String, Double> preferenceWeights = extractPreferenceWeights(query);
         String routeMode = extractRouteMode(query, preferenceWeights);
-        int maxStops = extractMaxStops(query);
+        int maxStops = resolveMaxStops(query, modelIntent);
         boolean multiStopRoute = isMultiStopRouteQuery(query, maxStops);
 
         Map<String, Object> routeResult;
@@ -408,6 +444,7 @@ public class RagService {
         context.put("scenicAreaIds", scenicAreaIds);
         context.put("cartPlan", cheapestPlan);
         context.put("canAddToCart", !scenicAreaIds.isEmpty());
+        answer = sanitizeAiAnswer(answer);
         context.put("answer", appendCartPrompt(answer, scenicAreaIds, cheapestPlan));
         return context;
     }
@@ -912,10 +949,12 @@ public class RagService {
         }
         return containsAny(normalized,
                 "有哪些知名景点", "知名景点", "著名景点", "热门景点", "有哪些景点", "有什么景点",
-                "有哪些好玩的地方", "好玩的地方", "值得去的地方", "推荐景点", "必去景点", "开封去哪玩");
+                "有哪些好玩的地方", "好玩的地方", "值得去的地方", "推荐景点", "必去景点", "开封去哪玩",
+                "去的地方", "适合老人", "适合带老人", "适合老年人", "适合亲子", "亲子游玩",
+                "适合儿童", "适合孩子", "适合小孩", "适合家庭", "推荐去哪里", "去哪里玩", "去哪儿玩");
     }
 
-    private String buildGeneralScenicListAnswer(String query, List<LargeScenicArea> largeAreas) {
+    private String buildGeneralScenicRecommendationFacts(List<LargeScenicArea> largeAreas, String query) {
         List<LargeScenicArea> scenicAreas = new ArrayList<>();
         if (largeAreas != null) {
             for (LargeScenicArea area : largeAreas) {
@@ -924,42 +963,282 @@ public class RagService {
                 }
             }
         }
-        if (scenicAreas.isEmpty()) {
-            scenicAreas = largeAreas == null ? new ArrayList<>() : new ArrayList<>(largeAreas);
+        if (scenicAreas.isEmpty() && largeAreas != null) {
+            scenicAreas = new ArrayList<>(largeAreas);
         }
         if (scenicAreas.isEmpty()) {
             return "目前还没有查到可用于介绍的景点信息。";
         }
 
-        scenicAreas.sort(Comparator
-                .comparingDouble((LargeScenicArea area) -> safeDecimal(area.getPopularityScore())).reversed()
-                .thenComparingInt(area -> safeInt(area.getRecommendedVisitDuration())).reversed());
+        Set<String> relevantTags = detectRelevantTags(query);
+        if (relevantTags.isEmpty()) {
+            scenicAreas.sort(Comparator
+                    .comparingDouble((LargeScenicArea area) -> safeDecimal(area.getPopularityScore())).reversed()
+                    .thenComparingInt(area -> safeInt(area.getRecommendedVisitDuration())).reversed());
+        } else {
+            scenicAreas.sort((a, b) -> {
+                int tagCompare = Integer.compare(
+                        countMatchingTags(b.getTags(), relevantTags),
+                        countMatchingTags(a.getTags(), relevantTags)
+                );
+                if (tagCompare != 0) return tagCompare;
+                return Double.compare(
+                        safeDecimal(b.getPopularityScore()),
+                        safeDecimal(a.getPopularityScore())
+                );
+            });
+            // 有明确标签偏好时，只推荐至少匹配一个标签的景点，避免推荐不相关景点
+            List<LargeScenicArea> filtered = new ArrayList<>();
+            for (LargeScenicArea area : scenicAreas) {
+                if (countMatchingTags(area.getTags(), relevantTags) > 0) {
+                    filtered.add(area);
+                }
+            }
+            if (!filtered.isEmpty()) {
+                scenicAreas = filtered;
+            }
+        }
 
-        String opening = containsAny(normalize(query), "好玩的地方", "值得去的地方")
-                ? "开封比较值得一去的地方有："
-                : "开封比较知名的景点有：";
-
-        StringBuilder answer = new StringBuilder();
-        answer.append(opening);
+        StringBuilder answer = new StringBuilder(buildGeneralRecommendationOpening(query));
         int limit = Math.min(6, scenicAreas.size());
         for (int i = 0; i < limit; i++) {
-            if (i > 0) {
-                answer.append("、");
-            }
-            answer.append(scenicAreas.get(i).getName());
-        }
-        answer.append("。");
-
-        for (int i = 0; i < Math.min(4, scenicAreas.size()); i++) {
             LargeScenicArea area = scenicAreas.get(i);
+            answer.append("\n\n").append(i + 1).append(". ").append(area.getName()).append("：");
             String description = trimToSentence(defaultText(area.getDescription()));
             if (!description.isBlank() && !"暂无信息".equals(description)) {
-                answer.append(area.getName()).append("：").append(description).append("。");
+                answer.append(ensureSentenceEnding(description));
+            }
+            String suitability = buildSuitabilityReason(area, query);
+            if (!suitability.isBlank()) {
+                answer.append(suitability);
             }
         }
+        return sanitizeAiAnswer(answer.toString());
+    }
 
-        answer.append("如果你想按历史文化、拍照打卡、亲子休闲或少走路来选，我可以继续按你的偏好推荐。");
-        return answer.toString();
+    private String buildGeneralRecommendationOpening(String query) {
+        String normalized = normalize(query);
+        if (containsAny(normalized, "老人", "适合老人", "老人家", "老年人", "长辈", "爸妈")) {
+            return "开封市有很多适合带老人去的地方，以下是一些推荐：";
+        }
+        if (containsAny(normalized, "亲子", "小孩", "孩子", "儿童", "家庭", "带娃")) {
+            return "开封市有很多适合亲子游玩的地方，以下是一些推荐：";
+        }
+        if (containsAny(normalized, "拍照", "摄影", "打卡", "拍摄")) {
+            return "开封市有很多适合拍照打卡的地方，以下是一些推荐：";
+        }
+        if (containsAny(normalized, "历史", "古迹", "古建", "文物", "古塔", "北宋")) {
+            return "开封市有很多适合历史文化游的地方，以下是一些推荐：";
+        }
+        if (containsAny(normalized, "寺庙", "佛教", "烧香", "拜佛")) {
+            return "开封市有很多适合寺庙人文游的地方，以下是一些推荐：";
+        }
+        if (containsAny(normalized, "园林", "公园", "花园")) {
+            return "开封市有很多适合园林休闲游的地方，以下是一些推荐：";
+        }
+        if (containsAny(normalized, "热闹", "表演", "演艺", "演出", "节目")) {
+            return "开封市有很多适合看演艺和热闹游玩的地方，以下是一些推荐：";
+        }
+        if (containsAny(normalized, "文化", "书法", "碑林", "人文")) {
+            return "开封市有很多适合人文文化游的地方，以下是一些推荐：";
+        }
+        if (containsAny(normalized, "散步", "休闲", "放松", "悠闲")) {
+            return "开封市有很多适合休闲散步的地方，以下是一些推荐：";
+        }
+        return "开封有不少值得游览的景区，以下是一些推荐：";
+    }
+
+    private String buildSuitabilityReason(LargeScenicArea area, String query) {
+        String combined = normalize(defaultText(area == null ? null : area.getTags()));
+        String normalizedQuery = normalize(query);
+        if (combined.isBlank() || "暂无信息".equals(combined)) {
+            return "";
+        }
+        String featureText = buildTagFeatureText(combined);
+        if (featureText.isBlank()) {
+            return "";
+        }
+        if (containsAny(normalizedQuery, "老人", "适合老人", "老人家", "老年人", "长辈", "爸妈")) {
+            if (containsAny(combined, "老人友好", "静态游览", "休闲", "散步", "园林", "寺庙", "人文")) {
+                return "作为以" + featureText + "为特色的景区，这里更适合老年人慢节奏参观" + buildElderlyPreferenceTail(area, combined);
+            }
+        }
+        if (containsAny(normalizedQuery, "亲子", "小孩", "孩子", "儿童", "家庭", "带娃")) {
+            if (containsAny(combined, "亲子", "儿童", "家庭", "演艺", "休闲", "园林", "散步")) {
+                return "作为以" + featureText + "为特色的景区，这里适合亲子一起游览" + buildFamilyPreferenceTail(combined);
+            }
+        }
+        if (containsAny(normalizedQuery, "拍照", "摄影", "打卡", "拍摄") && containsAny(combined, "拍照", "园林", "古塔", "古迹")) {
+            return "作为以" + featureText + "为特色的景区，这里画面辨识度比较高，适合拍照打卡和慢慢观赏。";
+        }
+        if (containsAny(normalizedQuery, "历史", "古迹", "古建", "文物", "古塔", "北宋") && containsAny(combined, "历史", "古迹", "古塔", "古建", "文物", "北宋")) {
+            return "作为以" + featureText + "为特色的景区，这里更适合想看历史遗存和城市文化的游客。";
+        }
+        if (containsAny(normalizedQuery, "寺庙", "佛教", "烧香", "拜佛") && containsAny(combined, "寺庙", "佛教", "人文", "静态游览")) {
+            return "作为以" + featureText + "为特色的景区，这里适合以寺庙参观和人文感受为主，游览节奏相对安静。";
+        }
+        if (containsAny(normalizedQuery, "园林", "公园", "花园") && containsAny(combined, "园林", "历史公园", "散步", "休闲")) {
+            return "作为以" + featureText + "为特色的景区，这里适合慢走观景，安排成轻松的园林休闲游。";
+        }
+        if (containsAny(normalizedQuery, "热闹", "表演", "演艺", "演出", "节目") && containsAny(combined, "演艺", "表演", "演出")) {
+            return "作为以" + featureText + "为特色的景区，这里更适合想看节目、感受热闹氛围的游客。";
+        }
+        if (containsAny(normalizedQuery, "文化", "书法", "碑林", "人文") && containsAny(combined, "人文", "书法", "碑林", "历史")) {
+            return "作为以" + featureText + "为特色的景区，这里适合把参观重点放在文化内容和人文体验上。";
+        }
+        if (containsAny(normalizedQuery, "散步", "休闲", "放松", "悠闲") && containsAny(combined, "散步", "休闲", "园林")) {
+            return "作为以" + featureText + "为特色的景区，这里适合放慢节奏散步停留，整体安排不需要太赶。";
+        }
+        return "";
+    }
+
+    private String buildElderlyPreferenceTail(LargeScenicArea area, String tags) {
+        String facilityText = buildConvenienceText(area);
+        String tail;
+        if (containsAny(tags, "老人友好", "静态游览")) {
+            tail = "，参观方式偏静态，体力压力相对较小";
+        } else if (containsAny(tags, "园林", "散步", "休闲", "历史公园")) {
+            tail = "，步行和停留节奏比较容易安排";
+        } else if (containsAny(tags, "寺庙", "佛教", "人文")) {
+            tail = "，可以以人文参观为主，节奏不需要太赶";
+        } else {
+            tail = "，整体节奏适合慢慢游览";
+        }
+        if (!facilityText.isBlank()) {
+            tail += "，" + facilityText;
+        }
+        return tail + "。";
+    }
+
+    private String buildFamilyPreferenceTail(String tags) {
+        if (containsAny(tags, "亲子", "儿童", "家庭")) {
+            return "，内容和停留节奏更贴近带孩子出行的需求。";
+        }
+        if (containsAny(tags, "演艺", "表演", "演出")) {
+            return "，演艺内容更容易吸引孩子停留。";
+        }
+        if (containsAny(tags, "园林", "散步", "休闲", "历史公园")) {
+            return "，空间节奏比较舒缓，方便家长带孩子边走边看。";
+        }
+        return "，整体安排起来比较轻松。";
+    }
+
+    private String buildConvenienceText(LargeScenicArea area) {
+        if (area == null) {
+            return "";
+        }
+        boolean foodConvenient = safeDecimal(area.getFoodConvenienceScore()) >= 4.0;
+        boolean restroomConvenient = safeDecimal(area.getRestroomConvenienceScore()) >= 4.0;
+        if (foodConvenient && restroomConvenient) {
+            return "周边补给和卫生间条件相对方便";
+        }
+        if (foodConvenient) {
+            return "周边餐饮补给相对方便";
+        }
+        if (restroomConvenient) {
+            return "卫生间条件相对方便";
+        }
+        return "";
+    }
+
+    private String buildTagFeatureText(String normalizedTags) {
+        List<String> features = new ArrayList<>();
+        addFeatureIfPresent(features, normalizedTags, "寺庙人文", "寺庙", "佛教");
+        addFeatureIfPresent(features, normalizedTags, "静态游览", "静态游览");
+        addFeatureIfPresent(features, normalizedTags, "老人友好", "老人友好", "老人", "老年人");
+        addFeatureIfPresent(features, normalizedTags, "亲子游玩", "亲子", "儿童", "家庭", "孩子");
+        addFeatureIfPresent(features, normalizedTags, "演艺体验", "演艺", "表演", "演出");
+        addFeatureIfPresent(features, normalizedTags, "园林景观", "园林", "历史公园", "公园");
+        addFeatureIfPresent(features, normalizedTags, "休闲散步", "休闲", "散步");
+        addFeatureIfPresent(features, normalizedTags, "拍照打卡", "拍照", "摄影", "打卡");
+        addFeatureIfPresent(features, normalizedTags, "古塔古建", "古塔", "古建");
+        addFeatureIfPresent(features, normalizedTags, "历史古迹", "历史", "古迹", "文物", "北宋");
+        addFeatureIfPresent(features, normalizedTags, "书法碑刻", "书法", "碑林");
+        addFeatureIfPresent(features, normalizedTags, "人文参观", "人文");
+        if (features.isEmpty()) {
+            return "";
+        }
+        int limit = Math.min(3, features.size());
+        StringJoiner joiner = new StringJoiner("、");
+        for (int i = 0; i < limit; i++) {
+            joiner.add(features.get(i));
+        }
+        return joiner + (features.size() > limit ? "等" : "");
+    }
+
+    private void addFeatureIfPresent(List<String> features, String tags, String feature, String... keywords) {
+        if (!features.contains(feature) && containsAny(tags, keywords)) {
+            features.add(feature);
+        }
+    }
+
+    private String ensureSentenceEnding(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String cleaned = text.trim();
+        if (cleaned.endsWith("。") || cleaned.endsWith("！") || cleaned.endsWith("？")) {
+            return cleaned;
+        }
+        return cleaned + "。";
+    }
+
+    /**
+     * 根据用户问题中的关键词，返回相关的景区标签集合。
+     * 用于对景点按用户需求进行排序，使结果更贴近用户意图。
+     */
+    private Set<String> detectRelevantTags(String query) {
+        if (query == null || query.isBlank()) {
+            return Collections.emptySet();
+        }
+        String normalized = normalize(query);
+
+        if (containsAny(normalized, "老人", "适合老人", "老人家", "老年人")) {
+            return new HashSet<>(Arrays.asList("老人友好", "老人", "老年人", "休闲", "散步", "静态游览"));
+        }
+        if (containsAny(normalized, "拍照", "摄影", "打卡", "拍摄")) {
+            return new HashSet<>(Arrays.asList("拍照"));
+        }
+        if (containsAny(normalized, "历史", "古迹", "古建", "文物", "古塔", "北宋")) {
+            return new HashSet<>(Arrays.asList("历史", "古迹", "古塔", "古建", "文物", "北宋"));
+        }
+        if (containsAny(normalized, "寺庙", "佛教", "烧香", "拜佛")) {
+            return new HashSet<>(Arrays.asList("寺庙", "人文", "静态游览"));
+        }
+        if (containsAny(normalized, "园林", "公园", "花园")) {
+            return new HashSet<>(Arrays.asList("园林", "历史公园", "散步", "休闲"));
+        }
+        if (containsAny(normalized, "热闹", "表演", "演艺", "演出", "节目")) {
+            return new HashSet<>(Arrays.asList("演艺"));
+        }
+        if (containsAny(normalized, "文化", "书法", "碑林", "人文")) {
+            return new HashSet<>(Arrays.asList("人文", "书法", "碑林", "历史"));
+        }
+        if (containsAny(normalized, "散步", "休闲", "放松", "悠闲")) {
+            return new HashSet<>(Arrays.asList("散步", "休闲", "园林"));
+        }
+        if (containsAny(normalized, "亲子", "小孩", "孩子", "儿童", "家庭")) {
+            return new HashSet<>(Arrays.asList("亲子", "儿童", "家庭", "孩子", "休闲", "散步", "园林", "历史公园"));
+        }
+
+        return Collections.emptySet();
+    }
+
+    /**
+     * 统计景区标签中命中的相关标签数量。
+     */
+    private int countMatchingTags(String tags, Set<String> relevantTags) {
+        if (tags == null || tags.isBlank() || relevantTags == null || relevantTags.isEmpty()) {
+            return 0;
+        }
+        String normalizedTags = normalize(tags);
+        int count = 0;
+        for (String tag : relevantTags) {
+            if (normalizedTags.contains(tag)) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private boolean isFoodRecommendationQuery(String query) {
@@ -975,7 +1254,7 @@ public class RagService {
                 "灌汤包", "锅贴", "桶子鸡", "夜市", "有什么吃的", "有哪些吃的", "吃什么");
     }
 
-    private String buildFoodRecommendationAnswer(String query, List<LargeScenicArea> largeAreas) {
+    private String buildFoodRecommendationFacts(List<LargeScenicArea> largeAreas) {
         List<LargeScenicArea> foodPlaces = new ArrayList<>();
         if (largeAreas != null) {
             for (LargeScenicArea area : largeAreas) {
@@ -993,7 +1272,6 @@ public class RagService {
                 .thenComparingDouble(area -> safeDecimal(area.getPopularityScore())).reversed());
 
         StringBuilder answer = new StringBuilder();
-        answer.append("开封可以优先考虑这些好吃的地方：");
         int limit = Math.min(6, foodPlaces.size());
         for (int i = 0; i < limit; i++) {
             if (i > 0) {
@@ -1012,7 +1290,6 @@ public class RagService {
             }
             answer.append(buildFoodPriceText(area)).append("。");
         }
-        answer.append("如果你想把美食和景点串成半日或一日游，也可以继续告诉我起点、终点和想去几个地方。");
         return answer.toString();
     }
 
@@ -1044,7 +1321,7 @@ public class RagService {
                 "有哪些套餐", "有什么套餐", "有啥套餐", "套餐有哪些", "套餐", "优惠票", "组合票", "套票");
     }
 
-    private String buildPackageRecommendationAnswer() {
+    private String buildPackageRecommendationFacts() {
         List<Product> products = loadOnSaleProducts();
         if (products.isEmpty()) {
             return "目前还没有查到在售的优惠套餐。";
@@ -1054,7 +1331,6 @@ public class RagService {
                 .thenComparing(product -> defaultText(product.getName())));
 
         StringBuilder answer = new StringBuilder();
-        answer.append("目前可选的开封优惠套餐有：");
         int limit = Math.min(6, products.size());
         for (int i = 0; i < limit; i++) {
             Product product = products.get(i);
@@ -1082,7 +1358,6 @@ public class RagService {
             }
             answer.append("。");
         }
-        answer.append("如果你有出行天数、预算或想去的景区，我也可以继续帮你挑更合适的套餐。");
         return answer.toString();
     }
 
@@ -1375,9 +1650,6 @@ public class RagService {
         if (priceText != null && !priceText.isBlank()) {
             answer.append(priceText).append("\n");
         }
-        answer.append("说明：本次仅规划")
-                .append(area.getName())
-                .append("园内路线，不再自动扩展到其他景区。\n");
         return answer.toString();
     }
 
@@ -1644,6 +1916,17 @@ public class RagService {
             int index = normalizedQuery.indexOf(normalizedName);
             if (index >= 0) {
                 hits.add(new NameHit(area.getName(), index, normalizedName.length()));
+                continue;
+            }
+            for (String alias : buildAreaAliasCandidates(normalizedName)) {
+                if (alias.equals(normalizedName) || isGenericAreaAlias(alias)) {
+                    continue;
+                }
+                index = normalizedQuery.indexOf(alias);
+                if (index >= 0) {
+                    hits.add(new NameHit(area.getName(), index, alias.length()));
+                    break;
+                }
             }
         }
         hits.sort(Comparator.comparingInt(NameHit::getIndex)
@@ -1666,6 +1949,7 @@ public class RagService {
             return null;
         }
         String normalizedInput = normalize(name);
+        String normalizedInputCore = normalizeAreaQueryName(normalizedInput);
         LargeScenicArea bestMatch = null;
         int bestScore = -1;
 
@@ -1676,10 +1960,14 @@ public class RagService {
                 score = 1000;
             } else if (isAreaAliasMatch(normalizedInput, normalizedAreaName)) {
                 score = 900;
+            } else if (!isGenericAreaAlias(normalizedInputCore) && isAreaAliasMatch(normalizedInputCore, normalizedAreaName)) {
+                score = 850;
             } else if (normalizedAreaName.contains(normalizedInput)) {
                 score = normalizedInput.length() + 100;
             } else if (normalizedInput.contains(normalizedAreaName)) {
                 score = normalizedAreaName.length() + 50;
+            } else if (!isGenericAreaAlias(normalizedInputCore) && normalizedAreaName.contains(normalizedInputCore)) {
+                score = normalizedInputCore.length() + 80;
             }
             if (score > bestScore) {
                 bestScore = score;
@@ -1690,23 +1978,84 @@ public class RagService {
     }
 
     private boolean isAreaAliasMatch(String normalizedInput, String normalizedAreaName) {
-        String inputAlias = normalizeAreaAlias(normalizedInput);
-        String areaAlias = normalizeAreaAlias(normalizedAreaName);
-        return !inputAlias.isBlank() && !areaAlias.isBlank() && inputAlias.equals(areaAlias);
+        for (String inputAlias : buildAreaAliasCandidates(normalizedInput)) {
+            if (isGenericAreaAlias(inputAlias)) {
+                continue;
+            }
+            for (String areaAlias : buildAreaAliasCandidates(normalizedAreaName)) {
+                if (!isGenericAreaAlias(areaAlias) && inputAlias.equals(areaAlias)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
-    private String normalizeAreaAlias(String value) {
+    private Set<String> buildAreaAliasCandidates(String value) {
+        LinkedHashSet<String> aliases = new LinkedHashSet<>();
         String normalized = normalize(value);
-        if (normalized.isBlank()) {
-            return "";
-        }
+        addCandidateVariant(aliases, normalized);
+
+        String queryName = normalizeAreaQueryName(normalized);
+        addCandidateVariant(aliases, queryName);
+
         if ("火车站".equals(normalized)
                 || "开封火车站".equals(normalized)
                 || "开封市火车站".equals(normalized)
                 || "开封站".equals(normalized)) {
-            return "开封站";
+            addCandidateVariant(aliases, "开封站");
+            return aliases;
         }
-        return normalized;
+        String cityless = queryName;
+        if (cityless.startsWith("开封市") && cityless.length() > 3) {
+            cityless = cityless.substring(3);
+        } else if (cityless.startsWith("开封") && cityless.length() > 2) {
+            cityless = cityless.substring(2);
+        }
+        addCandidateVariant(aliases, cityless);
+
+        String[] suffixes = {"景区", "公园"};
+        for (String suffix : suffixes) {
+            if (cityless.endsWith(suffix) && cityless.length() > suffix.length() + 1) {
+                addCandidateVariant(aliases, cityless.substring(0, cityless.length() - suffix.length()));
+            }
+        }
+        return aliases;
+    }
+
+    private String normalizeAreaQueryName(String value) {
+        String cleaned = stripScenicCandidatePrefix(value);
+        String[] suffixes = {
+                "如何游玩", "怎么游玩", "怎么玩", "怎么游", "怎么逛", "如何玩", "如何逛",
+                "游玩路线", "游览路线", "游玩建议", "游览建议", "游玩攻略", "游览攻略",
+                "游玩方案", "游览方案", "旅游方案", "路线", "方案", "攻略", "介绍",
+                "游玩", "游览", "旅游", "玩", "逛"
+        };
+        boolean changed;
+        do {
+            changed = false;
+            for (String suffix : suffixes) {
+                if (cleaned.endsWith(suffix) && cleaned.length() > suffix.length()) {
+                    cleaned = cleaned.substring(0, cleaned.length() - suffix.length());
+                    changed = true;
+                    break;
+                }
+            }
+        } while (changed);
+        return cleaned;
+    }
+
+    private boolean isGenericAreaAlias(String alias) {
+        if (alias == null || alias.isBlank()) {
+            return true;
+        }
+        return "开封".equals(alias)
+                || "开封市".equals(alias)
+                || "景区".equals(alias)
+                || "景点".equals(alias)
+                || "公园".equals(alias)
+                || "地方".equals(alias)
+                || alias.length() <= 1;
     }
 
     private SmallScenicSpot findSpotByName(String name, List<SmallScenicSpot> spots) {
@@ -1925,6 +2274,8 @@ public class RagService {
             String[] prefixes = {
                     "河南省开封市的", "河南开封市的", "河南开封的", "开封市的", "开封的",
                     "请问", "麻烦问下", "帮我看看", "帮我查下", "请介绍一下", "介绍一下",
+                    "请给出", "给出", "请给我", "给我", "再给我", "再给", "再推荐", "换一组", "换几个",
+                    "请提供一下", "提供一下", "请提供", "提供", "再提供",
                     "推荐一下", "推荐", "查一下", "查查", "看看", "了解一下", "了解",
                     "我想去", "想去", "我要去", "去"
             };
@@ -1949,6 +2300,9 @@ public class RagService {
             cityless = cityless.substring(3);
         } else if (cityless.startsWith("开封") && cityless.length() > 2) {
             cityless = cityless.substring(2);
+        }
+        if (isGenericScenicMentionPhrase(cityless)) {
+            return true;
         }
         String[] inquiryPrefixes = {"有哪些", "有什么", "有啥", "什么", "哪些", "推荐", "知名", "著名", "热门", "好玩", "值得", "多少", "几个"};
         for (String prefix : inquiryPrefixes) {
@@ -1999,9 +2353,27 @@ public class RagService {
                 "没有录入这个景点", "没有录入这个景区", "没有查到这个景点", "没有查到这个景区")) {
             return true;
         }
+        if (endsWithGenericScenicCategory(normalizedCandidate)
+                && containsAny(normalizedCandidate,
+                "适合", "亲子", "老人", "老年人", "老人家", "孩子", "小孩", "儿童", "家庭",
+                "游玩", "好玩", "值得", "推荐", "哪些", "什么", "去的")) {
+            return true;
+        }
         return normalizedCandidate.length() <= 1
                 || "景区".equals(normalizedCandidate)
                 || "景点".equals(normalizedCandidate)
+                || "更多景区".equals(normalizedCandidate)
+                || "更多景点".equals(normalizedCandidate)
+                || "更多地点".equals(normalizedCandidate)
+                || "更多地方".equals(normalizedCandidate)
+                || "其他景区".equals(normalizedCandidate)
+                || "其他景点".equals(normalizedCandidate)
+                || "其它景区".equals(normalizedCandidate)
+                || "其它景点".equals(normalizedCandidate)
+                || "别的景区".equals(normalizedCandidate)
+                || "别的景点".equals(normalizedCandidate)
+                || "新的景区".equals(normalizedCandidate)
+                || "新的景点".equals(normalizedCandidate)
                 || "公园".equals(normalizedCandidate)
                 || "寺".equals(normalizedCandidate)
                 || "桥".equals(normalizedCandidate)
@@ -2074,6 +2446,9 @@ public class RagService {
         if (text.contains("三日游")) {
             return 6;
         }
+        if (containsAny(text, "更多景区", "更多景点", "更多地点", "更多地方")) {
+            return 5;
+        }
         Matcher matcher = Pattern.compile("(\\d+)个(?:景区|景点|地点)").matcher(text);
         if (matcher.find()) {
             return safeParseInt(matcher.group(1), 3);
@@ -2088,6 +2463,25 @@ public class RagService {
             return 4;
         }
         return 3;
+    }
+
+    private int resolveMaxStops(String query, TourismIntentClassification modelIntent) {
+        int deterministicStops = extractMaxStops(query);
+        if (deterministicStops != 3) {
+            return deterministicStops;
+        }
+        if (modelIntent != null && modelIntent.maxStops > 0) {
+            return Math.max(1, Math.min(modelIntent.maxStops, 8));
+        }
+        return deterministicStops;
+    }
+
+    private List<SmallScenicSpot> loadSmallSpotsSafely() {
+        try {
+            return smallScenicSpotRepository == null ? Collections.emptyList() : smallScenicSpotRepository.findAll();
+        } catch (Exception ignored) {
+            return Collections.emptyList();
+        }
     }
 
     private Map<String, Double> extractPreferenceWeights(String query) {
@@ -2347,7 +2741,7 @@ public class RagService {
             Map<String, Object> area = orderedNodes.get(i);
             answer.append(i + 1).append(". ").append(area.get("name"));
             Object isAreaType = area.get("isAreaType");
-            if (isAreaType != null && Integer.parseInt(String.valueOf(isAreaType)) == 1) {
+            if (isAreaType != null && "1".equals(String.valueOf(isAreaType))) {
                 answer.append("（公共节点）");
             }
             answer.append("\n");
@@ -2489,14 +2883,14 @@ public class RagService {
         cleaned = cleaned.replaceAll("\\(\\s*ID\\s*[:：]?\\s*\\d+\\s*\\)", "");
         cleaned = cleaned.replaceAll("\\bID\\s*[:：]?\\s*\\d+\\b", "");
         cleaned = cleaned.replaceAll("所属大景区ID\\s*[:：]?\\s*\\d+", "");
-        cleaned = cleaned.replaceAll("(?i)\\bmeal\\s*price\\b", "人均消费参考");
-        cleaned = cleaned.replaceAll("(?i)\\bticket\\s*price\\b", "门票参考");
-        cleaned = cleaned.replaceAll("(?i)\\bprice\\b", "价格参考");
-        cleaned = cleaned.replaceAll("\\bWALK\\b", "步行");
-        cleaned = cleaned.replaceAll("\\bROAD\\b", "道路通行");
-        cleaned = cleaned.replaceAll("\\bDRIVE\\b", "驾车");
-        cleaned = cleaned.replaceAll("\\bSHUTTLE\\b", "接驳车");
-        cleaned = cleaned.replaceAll("\\bCABLEWAY\\b", "索道");
+        cleaned = cleaned.replaceAll("(?i)(?<![a-z])meal\\s*price(?![a-z])", "人均消费参考");
+        cleaned = cleaned.replaceAll("(?i)(?<![a-z])ticket\\s*price(?![a-z])", "门票参考");
+        cleaned = cleaned.replaceAll("(?i)(?<![a-z])price(?![a-z])", "价格参考");
+        cleaned = cleaned.replaceAll("(?<![a-zA-Z])WALK(?![a-zA-Z])", "步行");
+        cleaned = cleaned.replaceAll("(?<![a-zA-Z])ROAD(?![a-zA-Z])", "道路通行");
+        cleaned = cleaned.replaceAll("(?<![a-zA-Z])DRIVE(?![a-zA-Z])", "驾车");
+        cleaned = cleaned.replaceAll("(?<![a-zA-Z])SHUTTLE(?![a-zA-Z])", "接驳车");
+        cleaned = cleaned.replaceAll("(?<![a-zA-Z])CABLEWAY(?![a-zA-Z])", "索道");
         cleaned = cleaned.replaceAll("\\bpathDetails\\b", "");
         cleaned = cleaned.replaceAll("\\brecommendedAreaIds\\b", "");
         cleaned = cleaned.replaceAll("\\bsegmentDetails\\b", "");
@@ -2566,6 +2960,122 @@ public class RagService {
             return buildKnowledgeOnlyFallbackAnswer(query, largeAreas, smallSpots);
         }
         return cleaned;
+    }
+
+    private String polishFactAnswer(String query, String factAnswer, Set<String> allowedNames) {
+        String fallback = sanitizeAiAnswer(factAnswer);
+        if (chatModel == null || fallback.isBlank()) {
+            return fallback;
+        }
+
+        try {
+            String polished = chatModel.generate(buildFactPolishPrompt(query, fallback, allowedNames));
+            String cleaned = sanitizeAiAnswer(polished);
+            ValidationSummary validation = validateGeneratedAnswer(cleaned, allowedNames);
+            if (cleaned.isBlank() || validation.hasIssues()) {
+                return fallback;
+            }
+
+            cleaned = enforcePureChineseAndWhitelist(cleaned, allowedNames);
+            validation = validateGeneratedAnswer(cleaned, allowedNames);
+            if (cleaned.isBlank() || validation.hasIssues()) {
+                return fallback;
+            }
+            if (!preservesFactAnswer(fallback, cleaned, allowedNames)) {
+                return fallback;
+            }
+            return cleaned;
+        } catch (Exception ignored) {
+            return fallback;
+        }
+    }
+
+    private String buildFactPolishPrompt(String query, String factAnswer, Set<String> allowedNames) {
+        return "你是一名中文导游。下面的事实答案已经由系统根据数据库生成，你只能做表达润色。\n\n"
+                + "硬性要求：\n"
+                + "1. 必须保留事实答案里的全部景点名、点位名、价格、开放时间、游览时长和先后顺序。\n"
+                + "2. 禁止新增任何景点、建筑、路线、套餐、价格、开放时间或历史传说。\n"
+                + "3. 如果事实答案里说没有查到或没有录入，必须保留这个意思。\n"
+                + "4. 只能输出简体中文自然段，不要使用 Markdown，不要提到数据库、接口、字段或内部编号。\n"
+                + "5. 如果事实答案是偏好推荐，必须保留“以下是一些推荐”这类开头，并保留每个景区“作为以……为特色”的推荐理由。\n"
+                + "6. 允许出现的真实名称只有：" + buildAllowedNameSummary(allowedNames) + "\n\n"
+                + "游客问题：\n" + defaultText(query) + "\n\n"
+                + "事实答案：\n" + factAnswer;
+    }
+
+    private boolean preservesFactAnswer(String factAnswer, String polishedAnswer, Set<String> allowedNames) {
+        if (factAnswer == null || factAnswer.isBlank() || polishedAnswer == null || polishedAnswer.isBlank()) {
+            return false;
+        }
+        if (!preservesAllowedNamesInOrder(factAnswer, polishedAnswer, allowedNames)) {
+            return false;
+        }
+        if (!extractNumberUnitFacts(polishedAnswer).containsAll(extractNumberUnitFacts(factAnswer))) {
+            return false;
+        }
+        for (String phrase : List.of("开封市并没有这个景点", "没有录入", "暂无信息", "暂时没有查到", "免费开放", "可按需消费")) {
+            if (factAnswer.contains(phrase) && !polishedAnswer.contains(phrase)) {
+                return false;
+            }
+        }
+        for (String phrase : List.of("以下是一些推荐", "作为以")) {
+            if (factAnswer.contains(phrase) && !polishedAnswer.contains(phrase)) {
+                return false;
+            }
+        }
+        return polishedAnswer.length() <= factAnswer.length() * 2 + 80;
+    }
+
+    private boolean preservesAllowedNamesInOrder(String factAnswer, String polishedAnswer, Set<String> allowedNames) {
+        if (allowedNames == null || allowedNames.isEmpty()) {
+            return true;
+        }
+        List<NameHit> orderedNames = new ArrayList<>();
+        String normalizedFactAnswer = normalize(factAnswer);
+        Set<String> seenNormalizedNames = new LinkedHashSet<>();
+        for (String name : allowedNames) {
+            if (name == null || name.isBlank()) {
+                continue;
+            }
+            String normalizedName = normalize(name);
+            int index = normalizedFactAnswer.indexOf(normalizedName);
+            if (index >= 0 && seenNormalizedNames.add(normalizedName)) {
+                orderedNames.add(new NameHit(name, index, normalizedName.length()));
+            }
+        }
+        orderedNames.sort(Comparator.comparingInt(NameHit::getIndex)
+                .thenComparing((a, b) -> Integer.compare(b.getLength(), a.getLength())));
+
+        int lastIndex = -1;
+        for (NameHit hit : orderedNames) {
+            String name = hit.getName();
+            int currentIndex = polishedAnswer.indexOf(name);
+            if (currentIndex < 0 || currentIndex < lastIndex) {
+                return false;
+            }
+            lastIndex = currentIndex;
+        }
+        return true;
+    }
+
+    private Set<String> extractNumberUnitFacts(String text) {
+        LinkedHashSet<String> facts = new LinkedHashSet<>();
+        if (text == null || text.isBlank()) {
+            return facts;
+        }
+        Matcher matcher = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*(元|分钟|米|公里|小时)").matcher(text);
+        while (matcher.find()) {
+            facts.add(canonicalNumber(matcher.group(1)) + matcher.group(2));
+        }
+        return facts;
+    }
+
+    private String canonicalNumber(String value) {
+        try {
+            return new BigDecimal(value).stripTrailingZeros().toPlainString();
+        } catch (Exception ignored) {
+            return value;
+        }
     }
 
     private LinkedHashSet<String> buildAllowedScenicNameWhitelist(List<LargeScenicArea> largeAreas,
@@ -2780,6 +3290,9 @@ public class RagService {
                                               String previousAnswer,
                                               Set<String> allowedNames,
                                               ValidationSummary validation) {
+        if (chatModel == null) {
+            return previousAnswer;
+        }
         String rewritePrompt = context +
                 "允许出现的真实景点名称：" + buildAllowedNameSummary(allowedNames) +
                 "\n\n游客问题：" + query +
@@ -2791,7 +3304,7 @@ public class RagService {
                 "3. 若用户提到的景点不在已知景点范围内，就明确回答“开封市并没有这个景点”；若只是缺少相关细节，再说明“暂时没有查到这方面的介绍”\n" +
                 "4. 不得输出任何内部字段、内部编号或程序术语\n" +
                 "5. 只输出自然中文段落，不要使用 Markdown 或项目符号";
-        return ollamaChatModel.generate(rewritePrompt);
+        return chatModel.generate(rewritePrompt);
     }
 
     private String buildValidationSummaryText(ValidationSummary validation) {
@@ -2893,7 +3406,6 @@ public class RagService {
                 .comparingDouble((LargeScenicArea area) -> safeDecimal(area.getPopularityScore())).reversed()
                 .thenComparingInt(area -> safeInt(area.getRecommendedVisitDuration())).reversed());
 
-        answer.append("目前较受关注的景点有：");
         for (int i = 0; i < Math.min(4, sortedAreas.size()); i++) {
             LargeScenicArea area = sortedAreas.get(i);
             if (i > 0) {
@@ -2905,7 +3417,7 @@ public class RagService {
                 answer.append("，").append(trimToSentence(description));
             }
         }
-        answer.append("。以上内容仅依据现有景点资料整理，不包含未收录的名称或别名。");
+        answer.append("。");
         return sanitizeAiAnswer(answer.toString());
     }
 
@@ -3053,6 +3565,36 @@ public class RagService {
 
     private double safeDecimal(BigDecimal value) {
         return value == null ? 0.0 : value.doubleValue();
+    }
+
+    private enum TourismIntentType {
+        ROUTE_PLAN,
+        SCENIC_DETAIL,
+        PACKAGE_RECOMMENDATION,
+        FOOD_RECOMMENDATION,
+        GENERAL_SCENIC_LIST,
+        UNSUPPORTED,
+        UNKNOWN
+    }
+
+    private static class TourismIntentClassification {
+        private final TourismIntentType intentType;
+        private final String scenicName;
+        private final int maxStops;
+
+        private TourismIntentClassification(TourismIntentType intentType, String scenicName, int maxStops) {
+            this.intentType = intentType == null ? TourismIntentType.UNKNOWN : intentType;
+            this.scenicName = scenicName == null ? "" : scenicName.trim();
+            this.maxStops = maxStops;
+        }
+
+        private static TourismIntentClassification unknown() {
+            return new TourismIntentClassification(TourismIntentType.UNKNOWN, "", 0);
+        }
+
+        private boolean is(TourismIntentType type) {
+            return intentType == type;
+        }
     }
 
 

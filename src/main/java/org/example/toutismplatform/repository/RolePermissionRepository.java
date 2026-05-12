@@ -9,11 +9,14 @@ import org.springframework.stereotype.Repository;
 
 import java.util.List;
 
+import org.springframework.transaction.annotation.Transactional;
+
 @Repository
 public interface RolePermissionRepository extends JpaRepository<RolePermission, Long> {
     List<RolePermission> findByRoleId(Long roleId);
 
     @Modifying
+    @Transactional
     @Query("delete from RolePermission rp where rp.role.id = :roleId")
     void deleteByRoleId(@Param("roleId") Long roleId);
 }

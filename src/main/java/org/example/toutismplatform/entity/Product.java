@@ -36,13 +36,13 @@ public class Product {
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
     
-    @ManyToMany(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE}, fetch = FetchType.LAZY)
     @JoinTable(
         name = "product_large_scenic_area",
         joinColumns = @JoinColumn(name = "product_id"),
         inverseJoinColumns = @JoinColumn(name = "large_scenic_area_id")
     )
-    @JsonIgnoreProperties({"products"}) // 关键修复：忽略反向引用，防止无限循环
+    @JsonIgnoreProperties({"products", "smallScenicSpots"}) // 关键修复：忽略反向引用，防止无限循环
     private List<LargeScenicArea> largeScenicAreas;
     
     @PrePersist

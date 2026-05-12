@@ -92,7 +92,10 @@ public class PathService {
         used.add(currentId);
 
         int scenicCount = scenicAreas.size();
-        int target = maxStops == Integer.MAX_VALUE ? scenicCount : Math.max(1, Math.min(maxStops, scenicCount));
+        int target = maxStops == Integer.MAX_VALUE ? Math.min(scenicCount, 15) : Math.max(1, Math.min(maxStops, scenicCount));
+        if (preferredEndAreaId != null && areaMap.containsKey(preferredEndAreaId) && target > 1) {
+            target--;
+        }
         while (countScenicStops(stops, areaMap) < target) {
             Long nextId = selectNextArea(currentId, scenicAreas, used, graph, areaMap, mode, preferenceWeights, preferredEndAreaId);
             if (nextId == null) {
@@ -162,8 +165,9 @@ public class PathService {
             LargeScenicArea backward = areaMap.get(edge.getFromAreaId());
             double w1 = personalizedWeight(edge, forward, preferenceWeights);
             double w2 = personalizedWeight(edge, backward, preferenceWeights);
-            graph.get(edge.getFromAreaId()).add(new Edge(edge.getFromAreaId(), edge.getToAreaId(), w1, edge));
-            graph.get(edge.getToAreaId()).add(new Edge(edge.getToAreaId(), edge.getFromAreaId(), w2, edge));
+            double unifiedWeight = Math.max(w1, w2);
+            graph.get(edge.getFromAreaId()).add(new Edge(edge.getFromAreaId(), edge.getToAreaId(), unifiedWeight, edge));
+            graph.get(edge.getToAreaId()).add(new Edge(edge.getToAreaId(), edge.getFromAreaId(), unifiedWeight, edge));
         }
         return graph;
     }

@@ -8,4 +8,7 @@ import java.util.List;
 
 @Repository
 public interface LargeScenicAreaRepository extends JpaRepository<LargeScenicArea, Long> {
+    List<LargeScenicArea> findByNameContaining(String name);
+    List<LargeScenicArea> findByTagsContaining(String tag);
+    List<LargeScenicArea> findByLocationContaining(String location);
 }

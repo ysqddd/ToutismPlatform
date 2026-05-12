@@ -23,16 +23,16 @@ public class RoutePlanRecord {
     @Column(name = "end_area_id")
     private Long endAreaId;
 
-    @Column(name = "original_query", columnDefinition = "LONGTEXT", nullable = false)
+    @Column(name = "original_query", columnDefinition = "TEXT", nullable = false)
     private String originalQuery;
 
-    @Column(name = "extracted_preferences_json", columnDefinition = "JSON")
+    @Column(name = "extracted_preferences_json", columnDefinition = "TEXT")
     private String extractedPreferencesJson;
 
-    @Column(name = "candidate_area_ids_json", columnDefinition = "JSON")
+    @Column(name = "candidate_area_ids_json", columnDefinition = "TEXT")
     private String candidateAreaIdsJson;
 
-    @Column(name = "route_result_json", columnDefinition = "JSON")
+    @Column(name = "route_result_json", columnDefinition = "TEXT")
     private String routeResultJson;
 
     @Column(name = "created_at", nullable = false, updatable = false)
