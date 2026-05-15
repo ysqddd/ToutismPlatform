@@ -31,6 +31,20 @@ build/
 
 ### VS Code ###
 .vscode/
+.vs/
+
+### Local generated workspace files ###
+.codex_tmp/
+chrome-profile/
+docx_work/
+create_db_tables_docx.py
+doc_structure.txt
+modified_text.txt
+modify_shiyi_doc.py
+path_planning_algorithm_flowchart.svg
+rag_langchain4j_model_flowchart.svg
+system_function_module_diagram.svg
+git
 
 ### Local secrets ###
 application-local.properties
