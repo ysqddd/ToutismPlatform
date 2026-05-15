@@ -78,7 +78,10 @@
           <div class="scenic-body">
             <h3>{{ item.name }}</h3>
             <p>{{ briefText(item.description, 60) }}</p>
-            <button class="card-btn">查看详情</button>
+            <div class="card-actions">
+              <button class="card-btn cart-btn" @click.stop="addToCart(item)">加入购物车</button>
+              <button class="card-btn" @click.stop="goToScenic(item)">查看详情</button>
+            </div>
           </div>
         </div>
       </div>
@@ -122,6 +125,7 @@
 
 <script>
 import apiClient from '@/utils/axios'
+import { addScenicAreaToCart } from '@/utils/cart'
 
 export default {
   name: 'Home',
@@ -216,6 +220,24 @@ export default {
     goToScenic(slide) {
       if (slide && slide.id) {
         this.$router.push(`/scenic/${slide.id}`)
+      }
+    },
+    async addToCart(scenic) {
+      if (!scenic || !scenic.id) return
+
+      try {
+        await addScenicAreaToCart(scenic.id)
+        alert('已添加到购物车')
+        this.$router.push('/shopping-cart')
+      } catch (error) {
+        if (error.message === 'LOGIN_REQUIRED') {
+          alert('请先登录')
+          this.$router.push('/login')
+          return
+        }
+
+        console.error('添加购物车失败:', error)
+        alert('添加失败，请重试')
       }
     },
     jumpToFirstScenic() {
@@ -581,6 +603,12 @@ export default {
   min-height: 58px;
 }
 
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .card-btn {
   min-width: 116px;
   height: 42px;
@@ -591,6 +619,13 @@ export default {
   font-size: 14px;
   font-weight: 600;
   box-shadow: 0 12px 24px rgba(31, 98, 68, 0.18);
+}
+
+.cart-btn {
+  background: #f3faf6;
+  color: #1f6244;
+  border: 1px solid rgba(31, 98, 68, 0.18);
+  box-shadow: none;
 }
 
 .guide-section {

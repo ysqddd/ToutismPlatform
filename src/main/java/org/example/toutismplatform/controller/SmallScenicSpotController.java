@@ -6,7 +6,14 @@ import org.example.toutismplatform.repository.LargeScenicAreaRepository;
 import org.example.toutismplatform.repository.SmallScenicSpotRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.HashMap;
 import java.util.List;
@@ -18,71 +25,46 @@ import java.util.stream.Collectors;
 public class SmallScenicSpotController {
     @Autowired
     private SmallScenicSpotRepository smallScenicSpotRepository;
-    
+
     @Autowired
     private LargeScenicAreaRepository largeScenicAreaRepository;
-    
-    // 获取所有小景点（包含所属景区名称）
+
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> getAllSmallSpots() {
         List<SmallScenicSpot> spots = smallScenicSpotRepository.findAll();
-        List<Map<String, Object>> result = spots.stream().map(spot -> {
-            Map<String, Object> map = new HashMap<>();
-            map.put("id", spot.getId());
-            map.put("name", spot.getName());
-            map.put("description", spot.getDescription());
-            map.put("imageUrl", spot.getImageUrl());
-            map.put("visitingDuration", spot.getVisitingDuration());
-            map.put("tags", spot.getTags());
-            map.put("largeAreaId", spot.getLargeAreaId());
-            map.put("isSpotType", spot.getIsSpotType());
-            map.put("intensityLevel", spot.getIntensityLevel());
-            map.put("queueLevel", spot.getQueueLevel());
-            map.put("familyFriendlyScore", spot.getFamilyFriendlyScore());
-            map.put("elderlyFriendlyScore", spot.getElderlyFriendlyScore());
-            map.put("natureScore", spot.getNatureScore());
-            map.put("cultureScore", spot.getCultureScore());
-            map.put("photographyScore", spot.getPhotographyScore());
-            map.put("restConvenienceScore", spot.getRestConvenienceScore());
-            
-            // 获取所属景区名称
-            if (spot.getLargeAreaId() != null) {
-                largeScenicAreaRepository.findById(spot.getLargeAreaId()).ifPresent(area -> {
-                    map.put("areaName", area.getName());
-                });
-            }
-            
-            return map;
-        }).collect(Collectors.toList());
-        
+        List<Map<String, Object>> result = spots.stream()
+                .map(this::toSmallSpotResponse)
+                .collect(Collectors.toList());
+
         return ResponseEntity.ok(result);
     }
-    
-    // 根据大景区 ID 获取小景点列表
+
     @GetMapping("/large-area/{largeAreaId}")
-    public ResponseEntity<List<SmallScenicSpot>> getSmallSpotsByLargeAreaId(@PathVariable Long largeAreaId) {
+    public ResponseEntity<List<Map<String, Object>>> getSmallSpotsByLargeAreaId(@PathVariable Long largeAreaId) {
         List<SmallScenicSpot> spots = smallScenicSpotRepository.findByLargeAreaId(largeAreaId);
-        return ResponseEntity.ok(spots);
+        List<Map<String, Object>> result = spots.stream()
+                .map(this::toSmallSpotResponse)
+                .collect(Collectors.toList());
+
+        return ResponseEntity.ok(result);
     }
-    
-    // 根据 ID 获取小景点详情
+
     @GetMapping("/{id}")
-    public ResponseEntity<SmallScenicSpot> getSmallSpotById(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> getSmallSpotById(@PathVariable Long id) {
         return smallScenicSpotRepository.findById(id)
+                .map(this::toSmallSpotResponse)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
-    
-    // 创建小景点
+
     @PostMapping
-    public ResponseEntity<SmallScenicSpot> createSmallSpot(@RequestBody SmallScenicSpot smallSpot) {
+    public ResponseEntity<Map<String, Object>> createSmallSpot(@RequestBody SmallScenicSpot smallSpot) {
         SmallScenicSpot savedSpot = smallScenicSpotRepository.save(smallSpot);
-        return ResponseEntity.ok(savedSpot);
+        return ResponseEntity.ok(toSmallSpotResponse(savedSpot));
     }
-    
-    // 更新小景点
+
     @PutMapping("/{id}")
-    public ResponseEntity<SmallScenicSpot> updateSmallSpot(@PathVariable Long id, @RequestBody SmallScenicSpot smallSpot) {
+    public ResponseEntity<Map<String, Object>> updateSmallSpot(@PathVariable Long id, @RequestBody SmallScenicSpot smallSpot) {
         return smallScenicSpotRepository.findById(id)
                 .map(existingSpot -> {
                     if (smallSpot.getName() != null) {
@@ -127,18 +109,50 @@ public class SmallScenicSpotController {
                     if (smallSpot.getRestConvenienceScore() != null) {
                         existingSpot.setRestConvenienceScore(smallSpot.getRestConvenienceScore());
                     }
-                    return ResponseEntity.ok(smallScenicSpotRepository.save(existingSpot));
+
+                    SmallScenicSpot savedSpot = smallScenicSpotRepository.save(existingSpot);
+                    return ResponseEntity.ok(toSmallSpotResponse(savedSpot));
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
-    
-    // 删除小景点
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteSmallSpot(@PathVariable Long id) {
         if (!smallScenicSpotRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
         }
+
         smallScenicSpotRepository.deleteById(id);
         return ResponseEntity.ok().build();
+    }
+
+    private Map<String, Object> toSmallSpotResponse(SmallScenicSpot spot) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", spot.getId());
+        map.put("name", spot.getName());
+        map.put("description", spot.getDescription());
+        map.put("imageUrl", spot.getImageUrl());
+        map.put("visitingDuration", spot.getVisitingDuration());
+        map.put("tags", spot.getTags());
+        map.put("largeAreaId", spot.getLargeAreaId());
+        map.put("isSpotType", spot.getIsSpotType());
+        map.put("intensityLevel", spot.getIntensityLevel());
+        map.put("queueLevel", spot.getQueueLevel());
+        map.put("familyFriendlyScore", spot.getFamilyFriendlyScore());
+        map.put("elderlyFriendlyScore", spot.getElderlyFriendlyScore());
+        map.put("natureScore", spot.getNatureScore());
+        map.put("cultureScore", spot.getCultureScore());
+        map.put("photographyScore", spot.getPhotographyScore());
+        map.put("restConvenienceScore", spot.getRestConvenienceScore());
+        map.put("createdAt", spot.getCreatedAt());
+        map.put("updatedAt", spot.getUpdatedAt());
+
+        if (spot.getLargeAreaId() != null) {
+            largeScenicAreaRepository.findById(spot.getLargeAreaId())
+                    .map(LargeScenicArea::getName)
+                    .ifPresent(areaName -> map.put("areaName", areaName));
+        }
+
+        return map;
     }
 }

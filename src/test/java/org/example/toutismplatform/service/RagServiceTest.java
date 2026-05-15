@@ -8,6 +8,7 @@ import org.example.toutismplatform.repository.LargeScenicAreaRepository;
 import org.example.toutismplatform.repository.ProductRepository;
 import org.example.toutismplatform.repository.SmallScenicSpotRepository;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -256,6 +257,42 @@ class RagServiceTest {
     }
 
     @Test
+    void prefersScoreSignalsOverTagCountForElderlyRecommendations() {
+        RagService service = new RagService();
+        LargeScenicAreaRepository largeRepository = mock(LargeScenicAreaRepository.class);
+        SmallScenicSpotRepository smallRepository = mock(SmallScenicSpotRepository.class);
+        ReflectionTestUtils.setField(service, "largeScenicAreaRepository", largeRepository);
+        ReflectionTestUtils.setField(service, "smallScenicSpotRepository", smallRepository);
+
+        LargeScenicArea manyTagsLowScore = taggedArea(7L, "标签齐全低分园", "老人友好,静态游览,休闲,散步,园林,人文", 0);
+        manyTagsLowScore.setElderlyFriendlyScore(BigDecimal.valueOf(1));
+        manyTagsLowScore.setLeisureScore(BigDecimal.valueOf(1));
+        manyTagsLowScore.setRestroomConvenienceScore(BigDecimal.valueOf(1));
+        manyTagsLowScore.setIntensityLevel(5);
+        manyTagsLowScore.setCrowdLevel(5);
+        manyTagsLowScore.setPopularityScore(BigDecimal.valueOf(1));
+
+        LargeScenicArea fewerTagsHighScore = taggedArea(8L, "高分静养园", "休闲", 0);
+        fewerTagsHighScore.setElderlyFriendlyScore(BigDecimal.valueOf(5));
+        fewerTagsHighScore.setLeisureScore(BigDecimal.valueOf(5));
+        fewerTagsHighScore.setRestroomConvenienceScore(BigDecimal.valueOf(5));
+        fewerTagsHighScore.setFoodConvenienceScore(BigDecimal.valueOf(4));
+        fewerTagsHighScore.setIntensityLevel(1);
+        fewerTagsHighScore.setCrowdLevel(1);
+        fewerTagsHighScore.setPopularityScore(BigDecimal.valueOf(2));
+
+        when(largeRepository.findAll()).thenReturn(List.of(manyTagsLowScore, fewerTagsHighScore));
+        when(smallRepository.findAll()).thenReturn(List.of());
+
+        String answer = service.generateAnswer("有哪些适合老人去的地方\n游");
+
+        assertThat(answer)
+                .contains("高分静养园")
+                .contains("标签齐全低分园");
+        assertThat(answer.indexOf("高分静养园")).isLessThan(answer.indexOf("标签齐全低分园"));
+    }
+
+    @Test
     void usesDatabaseInsideRouteForKnownScenicTourQuery() {
         RagService service = new RagService();
         LargeScenicAreaRepository largeRepository = mock(LargeScenicAreaRepository.class);
@@ -457,6 +494,56 @@ class RagServiceTest {
     }
 
     @Test
+    void keepsRailwayStationAsStartAndQingmingAsEndWhenEndPhraseHasMoreStopsAfterIt() {
+        RagService service = new RagService();
+        LargeScenicAreaRepository largeRepository = mock(LargeScenicAreaRepository.class);
+        SmallScenicSpotRepository smallRepository = mock(SmallScenicSpotRepository.class);
+        PathService pathService = mock(PathService.class);
+        ReflectionTestUtils.setField(service, "largeScenicAreaRepository", largeRepository);
+        ReflectionTestUtils.setField(service, "smallScenicSpotRepository", smallRepository);
+        ReflectionTestUtils.setField(service, "pathService", pathService);
+
+        List<LargeScenicArea> areas = List.of(
+                area(1L, "开封站", 1),
+                area(2L, "清明上河园", 0),
+                area(3L, "龙亭景区", 0),
+                area(4L, "中国翰园碑林", 0),
+                area(5L, "万岁山武侠城", 0),
+                area(6L, "天波杨府", 0)
+        );
+        when(largeRepository.findAll()).thenReturn(areas);
+        when(smallRepository.findAll()).thenReturn(List.of());
+        when(pathService.recommendCityRoute(eq(1L), eq(2L), anyMap(), anyString(), eq(5)))
+                .thenReturn(Map.of(
+                        "success", true,
+                        "pathDetails", List.of(
+                                Map.of("id", 1L, "name", "开封站", "isAreaType", 1),
+                                Map.of("id", 3L, "name", "龙亭景区", "isAreaType", 0),
+                                Map.of("id", 4L, "name", "中国翰园碑林", "isAreaType", 0),
+                                Map.of("id", 5L, "name", "万岁山武侠城", "isAreaType", 0),
+                                Map.of("id", 6L, "name", "天波杨府", "isAreaType", 0),
+                                Map.of("id", 2L, "name", "清明上河园", "isAreaType", 0)
+                        ),
+                        "recommendedAreaIds", List.of(1L, 3L, 4L, 5L, 6L, 2L),
+                        "recommendedScenicAreaIds", List.of(3L, 4L, 5L, 6L, 2L),
+                        "segmentDetails", List.of(),
+                        "visitDetails", List.of(),
+                        "totalDuration", 0,
+                        "overallDuration", 0,
+                        "totalCost", 0.0
+                ));
+
+        Map<String, Object> context = service.buildRouteCartContext("从火车站开始，到清明上河园结束途径5处景区的方案");
+        String answer = String.valueOf(context.get("answer"));
+
+        verify(pathService).recommendCityRoute(eq(1L), eq(2L), anyMap(), anyString(), eq(5));
+        assertThat(answer)
+                .contains("起点偏好：开封站")
+                .contains("终点偏好：清明上河园")
+                .doesNotContain("起点偏好：清明上河园");
+    }
+
+    @Test
     void ignoresGenericScenicCategoryQueries() {
         RagService service = new RagService();
         LinkedHashSet<String> allowedNames = new LinkedHashSet<>(List.of("清明上河园"));
@@ -544,6 +631,95 @@ class RagServiceTest {
                 .contains("清明上河园")
                 .contains("门票参考：120.0元")
                 .doesNotContain("白马楼");
+    }
+
+    @Test
+    void usesChatMemoryForFollowUpReferenceInSameUserConversation() {
+        RagService service = new RagService();
+        LargeScenicAreaRepository largeRepository = mock(LargeScenicAreaRepository.class);
+        SmallScenicSpotRepository smallRepository = mock(SmallScenicSpotRepository.class);
+        ChatLanguageModel model = mock(ChatLanguageModel.class);
+        ReflectionTestUtils.setField(service, "largeScenicAreaRepository", largeRepository);
+        ReflectionTestUtils.setField(service, "smallScenicSpotRepository", smallRepository);
+        ReflectionTestUtils.setField(service, "chatModel", model);
+
+        LargeScenicArea area = area(2L, "清明上河园", 0);
+        area.setDescription("以宋文化沉浸体验和演艺见长。");
+        area.setPrice(BigDecimal.valueOf(120));
+        when(largeRepository.findAll()).thenReturn(List.of(area));
+        when(smallRepository.findAll()).thenReturn(List.of());
+        when(model.generate(anyString())).thenReturn(
+                "intent=SCENIC_DETAIL\nscenicName=清明上河园\nmaxStops=0\nreason=景区详情",
+                "清明上河园是开封的真实景点，门票参考：120.0元。",
+                "intent=SCENIC_DETAIL\nscenicName=清明上河园\nmaxStops=0\nreason=承接上文",
+                "清明上河园门票参考：120.0元。"
+        );
+
+        service.generateAnswer("介绍一下清明上河园", 7L, "alice");
+        String followUpAnswer = service.generateAnswer("它的门票多少钱", 7L, "alice");
+
+        assertThat(followUpAnswer)
+                .contains("清明上河园")
+                .contains("120.0元");
+        ArgumentCaptor<String> promptCaptor = ArgumentCaptor.forClass(String.class);
+        verify(model, org.mockito.Mockito.atLeast(4)).generate(promptCaptor.capture());
+        boolean hasPreviousTurnInPrompt = promptCaptor.getAllValues().stream().anyMatch(prompt ->
+                prompt.contains("最近对话")
+                        && prompt.contains("用户：介绍一下清明上河园")
+                        && prompt.contains("助手：清明上河园是开封的真实景点"));
+        assertThat(hasPreviousTurnInPrompt).isTrue();
+    }
+
+    @Test
+    void recommendsUnseenScenicAreasForMoreFollowUpInSameUserConversation() {
+        RagService service = new RagService();
+        LargeScenicAreaRepository largeRepository = mock(LargeScenicAreaRepository.class);
+        SmallScenicSpotRepository smallRepository = mock(SmallScenicSpotRepository.class);
+        ReflectionTestUtils.setField(service, "largeScenicAreaRepository", largeRepository);
+        ReflectionTestUtils.setField(service, "smallScenicSpotRepository", smallRepository);
+
+        LargeScenicArea yuwangtai = area(1L, "禹王台公园", 0);
+        yuwangtai.setDescription("兼具古迹、园林和休闲属性的历史公园，节奏舒缓，适合轻松游览。");
+        LargeScenicArea fanta = area(2L, "繁塔", 0);
+        fanta.setDescription("北宋古塔遗存，是开封现存年代很早的重要地面古建筑之一，适合历史向和古建向游客。");
+        LargeScenicArea daxiangguosi = area(3L, "大相国寺", 0);
+        daxiangguosi.setDescription("开封重要佛教文化景点，节奏相对平缓，适合人文参观与静态游览。");
+        LargeScenicArea hanyuan = area(4L, "中国翰园碑林", 0);
+        hanyuan.setDescription("集碑刻、书法、园林于一体的人文景区，适合文化游和拍照散步。");
+        LargeScenicArea tieta = area(5L, "铁塔景区", 0);
+        tieta.setDescription("以千年铁塔和园林环境闻名，适合散步、拍照和轻松游览。");
+        LargeScenicArea tianbo = area(6L, "天波杨府", 0);
+        tianbo.setDescription("以杨家将文化为主题，兼具园林观赏、历史故事和演艺体验。");
+        when(largeRepository.findAll()).thenReturn(List.of(
+                yuwangtai,
+                fanta,
+                daxiangguosi,
+                hanyuan,
+                tieta,
+                tianbo,
+                area(7L, "龙亭景区", 0),
+                area(8L, "开封府", 0),
+                area(9L, "清明上河园", 0)
+        ));
+        when(smallRepository.findAll()).thenReturn(List.of());
+
+        String firstAnswer = service.generateAnswer("有哪些知名景点", 8L, "bob");
+        String followUpAnswer = service.generateAnswer("能推荐更多景区吗", 8L, "bob");
+
+        assertThat(firstAnswer)
+                .contains("禹王台公园")
+                .contains("天波杨府");
+        assertThat(followUpAnswer)
+                .contains("除了前面提到的景区")
+                .contains("龙亭景区")
+                .contains("开封府")
+                .contains("清明上河园")
+                .doesNotContain("禹王台公园")
+                .doesNotContain("繁塔")
+                .doesNotContain("大相国寺")
+                .doesNotContain("中国翰园碑林")
+                .doesNotContain("铁塔景区")
+                .doesNotContain("天波杨府");
     }
 
     private LargeScenicArea area(String name) {

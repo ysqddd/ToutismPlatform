@@ -66,6 +66,7 @@
 
 <script>
 import apiClient from '@/utils/axios'
+import { addScenicAreaToCart } from '@/utils/cart'
 
 export default {
   name: 'ScenicIntro',
@@ -105,23 +106,23 @@ export default {
     viewDetails(scenic) {
       this.$router.push(`/scenic/${scenic.id}`)
     },
-    addToCart(scenic) {
-      const userId = localStorage.getItem('userId')
-      if (!userId) {
-        alert('请先登录')
-        this.$router.push('/login')
-        return
-      }
+    async addToCart(scenic) {
+      if (!scenic || !scenic.id) return
 
-      apiClient.post(`/api/cart/scenic?userId=${userId}&scenicAreaId=${scenic.id}`)
-        .then(() => {
-          alert('已添加到购物车')
-          this.$router.push('/shopping-cart')
-        })
-        .catch(error => {
-          console.error('添加失败:', error)
-          alert('添加失败，请重试')
-        })
+      try {
+        await addScenicAreaToCart(scenic.id)
+        alert('已添加到购物车')
+        this.$router.push('/shopping-cart')
+      } catch (error) {
+        if (error.message === 'LOGIN_REQUIRED') {
+          alert('请先登录')
+          this.$router.push('/login')
+          return
+        }
+
+        console.error('添加失败:', error)
+        alert('添加失败，请重试')
+      }
     }
   }
 }

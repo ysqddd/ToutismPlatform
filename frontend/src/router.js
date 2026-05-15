@@ -143,6 +143,17 @@ const router = createRouter({
   }
 })
 
+function scrollPageToTop() {
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  document.documentElement.scrollTop = 0
+  document.body.scrollTop = 0
+
+  const mainContent = document.querySelector('.main-content')
+  if (mainContent && typeof mainContent.scrollTo === 'function') {
+    mainContent.scrollTo({ top: 0, left: 0, behavior: 'auto' })
+  }
+}
+
 // 路由守卫，检查用户是否已登录
 router.beforeEach((to, from, next) => {
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
@@ -180,6 +191,17 @@ router.beforeEach((to, from, next) => {
   } else {
     next()
   }
+})
+
+router.afterEach((to, from) => {
+  if (to.fullPath === from.fullPath || to.hash) {
+    return
+  }
+
+  requestAnimationFrame(() => {
+    scrollPageToTop()
+    setTimeout(scrollPageToTop, 0)
+  })
 })
 
 export default router

@@ -38,7 +38,9 @@
             </div>
           </div>
           <div class="portal-actions">
-            <button class="portal-btn primary" @click="bookTicket">预订门票</button>
+            <button class="portal-btn primary" :disabled="addingToCart" @click="addToCart">
+              {{ addingToCart ? '添加中...' : '加入购物车' }}
+            </button>
           </div>
         </div>
       </section>
@@ -108,6 +110,7 @@
 
 <script>
 import apiClient from '@/utils/axios'
+import { addScenicAreaToCart } from '@/utils/cart'
 
 const gateImageFallbacks = {
   '2:金水门': '/images/qingming-jinshui-gate.jpg',
@@ -143,7 +146,8 @@ export default {
         recommendedVisitDuration: 120,
         tags: ''
       },
-      spots: []
+      spots: [],
+      addingToCart: false
     }
   },
   computed: {
@@ -221,8 +225,26 @@ export default {
         console.error('加载景区详情失败:', error)
       }
     },
-    bookTicket() {
-      alert('已预订门票')
+    async addToCart() {
+      if (!this.scenic || !this.scenic.id) return
+
+      this.addingToCart = true
+      try {
+        await addScenicAreaToCart(this.scenic.id)
+        alert('已添加到购物车')
+        this.$router.push('/shopping-cart')
+      } catch (error) {
+        if (error.message === 'LOGIN_REQUIRED') {
+          alert('请先登录')
+          this.$router.push('/login')
+          return
+        }
+
+        console.error('添加购物车失败:', error)
+        alert('添加失败，请重试')
+      } finally {
+        this.addingToCart = false
+      }
     }
   }
 }

@@ -384,8 +384,23 @@ export default {
   width: 100%;
 }
 
+.cart-page .portal-empty {
+  max-width: calc((100% - 22px) / 2);
+  text-align: left;
+}
+
+.cart-page .portal-empty .portal-subtitle {
+  max-width: none;
+}
+
 .empty-actions {
-  justify-content: center;
+  justify-content: flex-start;
+}
+
+@media (max-width: 960px) {
+  .cart-page .portal-empty {
+    max-width: none;
+  }
 }
 
 @media (max-width: 768px) {
