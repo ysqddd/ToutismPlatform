@@ -37,10 +37,27 @@ public class PathService {
         return calculateClassicPath(startAreaId, endAreaId, mode);
     }
 
+    public Map<String, Object> calculateShortestPath(Long startAreaId,
+                                                     Long endAreaId,
+                                                     String weightType,
+                                                     List<LargeScenicArea> areas,
+                                                     List<SmallScenicSpot> smallSpots) {
+        String mode = normalizeWeightType(weightType);
+        return calculateClassicPath(startAreaId, endAreaId, mode, safeAreaList(areas), smallSpots);
+    }
+
     public Map<String, Object> calculatePersonalizedPath(Long startAreaId,
                                                          Long endAreaId,
                                                          Map<String, Double> preferenceWeights) {
-        List<LargeScenicArea> areas = largeScenicAreaRepository.findAll();
+        return calculatePersonalizedPath(startAreaId, endAreaId, preferenceWeights, largeScenicAreaRepository.findAll(), null);
+    }
+
+    public Map<String, Object> calculatePersonalizedPath(Long startAreaId,
+                                                         Long endAreaId,
+                                                         Map<String, Double> preferenceWeights,
+                                                         List<LargeScenicArea> areas,
+                                                         List<SmallScenicSpot> smallSpots) {
+        areas = safeAreaList(areas);
         List<ScenicAreaEdge> edges = scenicAreaEdgeRepository.findAll();
         Map<Long, LargeScenicArea> areaMap = buildAreaMap(areas);
 
@@ -49,7 +66,7 @@ public class PathService {
         }
 
         Map<Long, List<Edge>> graph = buildPersonalizedGraph(areas, edges, preferenceWeights);
-        return runDijkstra(startAreaId, endAreaId, graph, areaMap, MODE_PERSONALIZED, preferenceWeights);
+        return runDijkstra(startAreaId, endAreaId, graph, areaMap, MODE_PERSONALIZED, preferenceWeights, smallSpots, true);
     }
 
     public Map<String, Object> recommendCityRoute(Long preferredStartAreaId,
@@ -57,7 +74,18 @@ public class PathService {
                                                   Map<String, Double> preferenceWeights,
                                                   String routeMode,
                                                   int maxStops) {
-        List<LargeScenicArea> areas = largeScenicAreaRepository.findAll();
+        return recommendCityRoute(preferredStartAreaId, preferredEndAreaId, preferenceWeights, routeMode, maxStops,
+                largeScenicAreaRepository.findAll(), null);
+    }
+
+    public Map<String, Object> recommendCityRoute(Long preferredStartAreaId,
+                                                  Long preferredEndAreaId,
+                                                  Map<String, Double> preferenceWeights,
+                                                  String routeMode,
+                                                  int maxStops,
+                                                  List<LargeScenicArea> areas,
+                                                  List<SmallScenicSpot> smallSpots) {
+        areas = safeAreaList(areas);
         List<ScenicAreaEdge> edges = scenicAreaEdgeRepository.findAll();
         Map<Long, LargeScenicArea> areaMap = buildAreaMap(areas);
         String mode = normalizeWeightType(routeMode);
@@ -111,13 +139,20 @@ public class PathService {
         }
 
         if (stops.size() == 1) {
-            return buildSingleStopResult(areaMap.get(stops.get(0)), mode, preferenceWeights);
+            return buildSingleStopResult(areaMap.get(stops.get(0)), mode, preferenceWeights, smallSpots);
         }
-        return mergeRoute(stops, graph, areaMap, mode, preferenceWeights);
+        return mergeRoute(stops, graph, areaMap, mode, preferenceWeights, smallSpots);
     }
 
     private Map<String, Object> calculateClassicPath(Long startAreaId, Long endAreaId, String weightType) {
-        List<LargeScenicArea> areas = largeScenicAreaRepository.findAll();
+        return calculateClassicPath(startAreaId, endAreaId, weightType, largeScenicAreaRepository.findAll(), null);
+    }
+
+    private Map<String, Object> calculateClassicPath(Long startAreaId,
+                                                     Long endAreaId,
+                                                     String weightType,
+                                                     List<LargeScenicArea> areas,
+                                                     List<SmallScenicSpot> smallSpots) {
         List<ScenicAreaEdge> edges = scenicAreaEdgeRepository.findAll();
         Map<Long, LargeScenicArea> areaMap = buildAreaMap(areas);
 
@@ -126,7 +161,11 @@ public class PathService {
         }
 
         Map<Long, List<Edge>> graph = buildClassicGraph(areas, edges, weightType);
-        return runDijkstra(startAreaId, endAreaId, graph, areaMap, weightType, null);
+        return runDijkstra(startAreaId, endAreaId, graph, areaMap, weightType, null, smallSpots, true);
+    }
+
+    private List<LargeScenicArea> safeAreaList(List<LargeScenicArea> areas) {
+        return areas == null ? Collections.emptyList() : areas;
     }
 
     private Map<Long, LargeScenicArea> buildAreaMap(List<LargeScenicArea> areas) {
@@ -198,6 +237,17 @@ public class PathService {
                                             Map<Long, LargeScenicArea> areaMap,
                                             String weightType,
                                             Map<String, Double> preferenceWeights) {
+        return runDijkstra(startAreaId, endAreaId, graph, areaMap, weightType, preferenceWeights, null, true);
+    }
+
+    private Map<String, Object> runDijkstra(Long startAreaId,
+                                            Long endAreaId,
+                                            Map<Long, List<Edge>> graph,
+                                            Map<Long, LargeScenicArea> areaMap,
+                                            String weightType,
+                                            Map<String, Double> preferenceWeights,
+                                            List<SmallScenicSpot> smallSpots,
+                                            boolean enrichVisitSummary) {
         if (!graph.containsKey(startAreaId) || !graph.containsKey(endAreaId)) {
             return buildFailureResult("起点或终点不存在于当前图中。", weightType);
         }
@@ -243,14 +293,16 @@ public class PathService {
             current = prev.get(current);
         }
         Collections.reverse(path);
-        return buildPathResult(path, prevEdge, areaMap, weightType, preferenceWeights, dist.get(endAreaId));
+        return buildPathResult(path, prevEdge, areaMap, weightType, preferenceWeights, dist.get(endAreaId),
+                smallSpots, enrichVisitSummary);
     }
 
     private Map<String, Object> mergeRoute(List<Long> stops,
                                            Map<Long, List<Edge>> graph,
                                            Map<Long, LargeScenicArea> areaMap,
                                            String mode,
-                                           Map<String, Double> preferenceWeights) {
+                                           Map<String, Double> preferenceWeights,
+                                           List<SmallScenicSpot> smallSpots) {
         List<Long> mergedPath = new ArrayList<>();
         List<Map<String, Object>> mergedSegments = new ArrayList<>();
         double totalWeight = 0.0;
@@ -259,7 +311,8 @@ public class PathService {
         double totalCost = 0.0;
 
         for (int i = 1; i < stops.size(); i++) {
-            Map<String, Object> step = runDijkstra(stops.get(i - 1), stops.get(i), graph, areaMap, mode, preferenceWeights);
+            Map<String, Object> step = runDijkstra(stops.get(i - 1), stops.get(i), graph, areaMap, mode,
+                    preferenceWeights, null, false);
             if (!Boolean.TRUE.equals(step.get("success"))) {
                 return buildFailureResult("推荐的景区之间缺少连通路径，无法生成完整城市路线。", mode);
             }
@@ -290,7 +343,7 @@ public class PathService {
         if (preferenceWeights != null) {
             result.put("preferences", new LinkedHashMap<>(preferenceWeights));
         }
-        enrichVisitSummary(result, mergedPath, areaMap, preferenceWeights);
+        enrichVisitSummary(result, mergedPath, areaMap, preferenceWeights, smallSpots);
         return result;
     }
 
@@ -300,6 +353,17 @@ public class PathService {
                                                 String weightType,
                                                 Map<String, Double> preferenceWeights,
                                                 double totalWeight) {
+        return buildPathResult(path, previousEdges, areaMap, weightType, preferenceWeights, totalWeight, null, true);
+    }
+
+    private Map<String, Object> buildPathResult(List<Long> path,
+                                                Map<Long, Edge> previousEdges,
+                                                Map<Long, LargeScenicArea> areaMap,
+                                                String weightType,
+                                                Map<String, Double> preferenceWeights,
+                                                double totalWeight,
+                                                List<SmallScenicSpot> smallSpots,
+                                                boolean enrichVisitSummary) {
         List<Map<String, Object>> segmentDetails = new ArrayList<>();
         double totalDistance = 0.0;
         int totalDuration = 0;
@@ -342,7 +406,9 @@ public class PathService {
         if (preferenceWeights != null) {
             result.put("preferences", new LinkedHashMap<>(preferenceWeights));
         }
-        enrichVisitSummary(result, path, areaMap, preferenceWeights);
+        if (enrichVisitSummary) {
+            enrichVisitSummary(result, path, areaMap, preferenceWeights, smallSpots);
+        }
         return result;
     }
 
@@ -368,6 +434,13 @@ public class PathService {
     private Map<String, Object> buildSingleStopResult(LargeScenicArea area,
                                                       String mode,
                                                       Map<String, Double> preferenceWeights) {
+        return buildSingleStopResult(area, mode, preferenceWeights, null);
+    }
+
+    private Map<String, Object> buildSingleStopResult(LargeScenicArea area,
+                                                      String mode,
+                                                      Map<String, Double> preferenceWeights,
+                                                      List<SmallScenicSpot> smallSpots) {
         Map<Long, LargeScenicArea> map = new HashMap<>();
         map.put(area.getId(), area);
         Map<String, Object> result = new LinkedHashMap<>();
@@ -384,7 +457,7 @@ public class PathService {
         if (preferenceWeights != null) {
             result.put("preferences", new LinkedHashMap<>(preferenceWeights));
         }
-        enrichVisitSummary(result, Collections.singletonList(area.getId()), map, preferenceWeights);
+        enrichVisitSummary(result, Collections.singletonList(area.getId()), map, preferenceWeights, smallSpots);
         return result;
     }
 
@@ -421,7 +494,8 @@ public class PathService {
             if (preferredEndAreaId != null && Objects.equals(preferredEndAreaId, area.getId())) {
                 continue;
             }
-            Map<String, Object> step = runDijkstra(currentId, area.getId(), graph, areaMap, mode, preferenceWeights);
+            Map<String, Object> step = runDijkstra(currentId, area.getId(), graph, areaMap, mode,
+                    preferenceWeights, null, false);
             if (!Boolean.TRUE.equals(step.get("success"))) {
                 continue;
             }
@@ -470,7 +544,17 @@ public class PathService {
                                     List<Long> orderedAreaIds,
                                     Map<Long, LargeScenicArea> areaMap,
                                     Map<String, Double> preferenceWeights) {
-        List<SmallScenicSpot> allSpots = smallScenicSpotRepository == null
+        enrichVisitSummary(result, orderedAreaIds, areaMap, preferenceWeights, null);
+    }
+
+    private void enrichVisitSummary(Map<String, Object> result,
+                                    List<Long> orderedAreaIds,
+                                    Map<Long, LargeScenicArea> areaMap,
+                                    Map<String, Double> preferenceWeights,
+                                    List<SmallScenicSpot> providedSmallSpots) {
+        List<SmallScenicSpot> allSpots = providedSmallSpots != null
+                ? providedSmallSpots
+                : smallScenicSpotRepository == null
                 ? Collections.emptyList()
                 : smallScenicSpotRepository.findAll();
         Map<Long, List<SmallScenicSpot>> spotMap = new HashMap<>();

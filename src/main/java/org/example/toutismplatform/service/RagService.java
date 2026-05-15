@@ -80,25 +80,6 @@ public class RagService {
 
             事实答案：
             {{factAnswer}}""");
-    private static final PromptTemplate WHITELIST_REWRITE_PROMPT = PromptTemplate.from("""
-            {{context}}允许出现的真实景点名称：{{allowedNames}}
-
-            最近对话：
-            {{chatHistory}}
-
-            游客问题：{{query}}
-
-            上一版回答：{{previousAnswer}}
-
-            发现的问题：{{validationSummary}}
-
-            请重新生成答案，并严格遵守以下要求：
-            1. 只能使用知识库中已经出现过的真实景点名称，不得新增任何名称
-            2. 不得出现英文、拼音、外文别名或中英混写
-            3. 若用户提到的景点不在已知景点范围内，就明确回答“开封市并没有这个景点”；若只是缺少相关细节，再说明“暂时没有查到这方面的介绍”
-            4. 不得输出任何内部字段、内部编号或程序术语
-            5. 只输出自然中文段落，不要使用 Markdown 或项目符号""");
-
     private final ChatMemoryStore chatMemoryStore = new InMemoryChatMemoryStore();
     private final Map<String, ChatMemory> chatMemoryByUser = new ConcurrentHashMap<>();
 
@@ -119,6 +100,9 @@ public class RagService {
 
     @Autowired(required = false)
     private JdbcTemplate jdbcTemplate;
+
+    @Autowired(required = false)
+    private CartPlanService cartPlanService;
 
 
     public String generateAnswer(String query, Long userId, String username) {
@@ -163,7 +147,7 @@ public class RagService {
                 if (packageRecommendationQuery || modelIntent.is(TourismIntentType.PACKAGE_RECOMMENDATION)) {
                     answer = polishFactAnswer(query, buildPackageRecommendationFacts(), allowedNames, chatHistory);
                 } else if (pathPlanningQuery || modelIntent.is(TourismIntentType.ROUTE_PLAN)) {
-                    Map<String, Object> routeCartContext = buildRouteCartContext(query, modelIntent);
+                    Map<String, Object> routeCartContext = buildRouteCartContext(query, modelIntent, largeAreas, smallSpots);
                     rememberPendingCartContext(currentUserKey, routeCartContext);
                     answer = sanitizeAiAnswer(String.valueOf(routeCartContext.getOrDefault("answer", "暂时无法生成路线。")));
                 } else if (foodRecommendationQuery || modelIntent.is(TourismIntentType.FOOD_RECOMMENDATION)) {
@@ -193,7 +177,12 @@ public class RagService {
         return rememberConversation(chatMemory, query, answer);
     }
 
-
+    private CartPlanService cartPlanService() {
+        if (cartPlanService == null) {
+            cartPlanService = new CartPlanService(largeScenicAreaRepository, jdbcTemplate);
+        }
+        return cartPlanService;
+    }
 
 
     private String buildConversationUserKey(Long userId, String username) {
@@ -412,7 +401,7 @@ public class RagService {
         if (userId == null) {
             return "谢谢你的认可，这份推荐我已经先帮你记下了。当前还不能直接替你完成加购，请在请求里补充 userId 或确保登录状态有效后再试。";
         }
-        Map<String, Object> addResult = addPendingPlanToCart(userId, pendingContext);
+        Map<String, Object> addResult = cartPlanService().addPendingPlanToCart(userId, pendingContext);
         if (!Boolean.TRUE.equals(addResult.get("success"))) {
             return String.valueOf(addResult.getOrDefault("message", "谢谢你的认可，但暂时无法将该方案加入购物车。"));
         }
@@ -465,21 +454,30 @@ public class RagService {
             }
         }
 
-        Map<String, Object> cheapestPlan = buildCheapestCartPlan(scenicAreaIds, null);
+        Map<String, Object> cheapestPlan = cartPlanService().buildCheapestCartPlan(scenicAreaIds, null, largeAreas);
         context.put("success", true);
         context.put("routeResult", Collections.emptyMap());
         context.put("scenicAreaIds", scenicAreaIds);
         context.put("cartPlan", cheapestPlan);
         context.put("canAddToCart", !scenicAreaIds.isEmpty());
-        context.put("answer", appendCartPrompt(answer, scenicAreaIds, cheapestPlan));
+        context.put("answer", cartPlanService().appendCartPrompt(answer, scenicAreaIds, cheapestPlan));
         return context;
     }
 
     public Map<String, Object> buildRouteCartContext(String query) {
-        return buildRouteCartContext(query, TourismIntentClassification.unknown());
+        return buildRouteCartContext(query, TourismIntentClassification.unknown(),
+                largeScenicAreaRepository.findAll(), loadSmallSpotsSafely());
     }
 
     private Map<String, Object> buildRouteCartContext(String query, TourismIntentClassification modelIntent) {
+        return buildRouteCartContext(query, modelIntent,
+                largeScenicAreaRepository.findAll(), loadSmallSpotsSafely());
+    }
+
+    private Map<String, Object> buildRouteCartContext(String query,
+                                                      TourismIntentClassification modelIntent,
+                                                      List<LargeScenicArea> allAreas,
+                                                      List<SmallScenicSpot> allSpots) {
         Map<String, Object> context = new LinkedHashMap<>();
         context.put("success", false);
         context.put("query", query);
@@ -493,7 +491,8 @@ public class RagService {
             return context;
         }
 
-        List<LargeScenicArea> allAreas = largeScenicAreaRepository.findAll();
+        allAreas = allAreas == null ? Collections.emptyList() : allAreas;
+        allSpots = allSpots == null ? Collections.emptyList() : allSpots;
         if (allAreas.isEmpty()) {
             context.put("answer", "当前还没有可用于路线规划的景区数据。");
             return context;
@@ -525,7 +524,7 @@ public class RagService {
 
         LargeScenicArea singleArea = resolveSingleAreaRouteTarget(startArea, endArea, mentionedAreas);
         if (singleArea != null && isSingleAreaTourIntent(query, startArea, endArea, mentionedAreas, singleArea)) {
-            answer = buildSingleAreaTourAnswer(singleArea, query, preferenceWeights);
+            answer = buildSingleAreaTourAnswer(singleArea, query, preferenceWeights, allSpots);
             routeResult = new LinkedHashMap<>();
             routeResult.put("success", true);
             routeResult.put("recommendedAreaIds", Collections.singletonList(singleArea.getId()));
@@ -540,19 +539,19 @@ public class RagService {
             pathDetails.add(pathDetail);
             routeResult.put("pathDetails", pathDetails);
         } else if (startArea != null && endArea != null && !Objects.equals(startArea.getId(), endArea.getId()) && !multiStopRoute) {
-            Map<String, Object> selectedPath = selectRouteResult(startArea.getId(), endArea.getId(), routeMode, preferenceWeights);
+            Map<String, Object> selectedPath = selectRouteResult(startArea.getId(), endArea.getId(), routeMode,
+                    preferenceWeights, allAreas, allSpots);
             if (!Boolean.TRUE.equals(selectedPath.get("success"))) {
                 context.put("answer", String.valueOf(selectedPath.getOrDefault("message", "暂时无法规划该路线。")));
                 return context;
             }
             routeResult = selectedPath;
-            Map<String, Object> distancePath = pathService.calculateShortestPath(startArea.getId(), endArea.getId(), MODE_DISTANCE);
-            Map<String, Object> timePath = pathService.calculateShortestPath(startArea.getId(), endArea.getId(), MODE_DURATION);
-            answer = buildSingleRouteAnswer(startArea, endArea, preferenceWeights, routeMode, selectedPath, distancePath, timePath);
+            answer = buildSingleRouteAnswer(startArea, endArea, preferenceWeights, routeMode, selectedPath);
         } else {
             Long preferredStartId = startArea == null ? null : startArea.getId();
             Long preferredEndId = endArea == null ? null : endArea.getId();
-            Map<String, Object> cityRoute = pathService.recommendCityRoute(preferredStartId, preferredEndId, preferenceWeights, routeMode, maxStops);
+            Map<String, Object> cityRoute = pathService.recommendCityRoute(preferredStartId, preferredEndId,
+                    preferenceWeights, routeMode, maxStops, allAreas, allSpots);
             if (!Boolean.TRUE.equals(cityRoute.get("success"))) {
                 context.put("answer", String.valueOf(cityRoute.getOrDefault("message", "暂时无法生成城市内景区推荐路线。")));
                 return context;
@@ -562,7 +561,7 @@ public class RagService {
         }
 
         List<Long> scenicAreaIds = extractRecommendedScenicAreaIds(routeResult);
-        Map<String, Object> cheapestPlan = buildCheapestCartPlan(scenicAreaIds, null);
+        Map<String, Object> cheapestPlan = cartPlanService().buildCheapestCartPlan(scenicAreaIds, null, allAreas);
 
         context.put("success", true);
         context.put("routeResult", routeResult);
@@ -570,7 +569,7 @@ public class RagService {
         context.put("cartPlan", cheapestPlan);
         context.put("canAddToCart", !scenicAreaIds.isEmpty());
         answer = sanitizeAiAnswer(answer);
-        context.put("answer", appendCartPrompt(answer, scenicAreaIds, cheapestPlan));
+        context.put("answer", cartPlanService().appendCartPrompt(answer, scenicAreaIds, cheapestPlan));
         return context;
     }
 
@@ -614,454 +613,6 @@ public class RagService {
         }
 
         return new ArrayList<>(ids);
-    }
-
-    private Map<String, Object> buildCheapestCartPlan(List<Long> scenicAreaIds, Long userId) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        LinkedHashSet<Long> uniqueIds = new LinkedHashSet<>();
-        if (scenicAreaIds != null) {
-            uniqueIds.addAll(scenicAreaIds);
-        }
-        List<Long> orderedIds = new ArrayList<>(uniqueIds);
-        if (orderedIds.isEmpty()) {
-            result.put("success", false);
-            result.put("message", "没有可用于加入购物车的景区。");
-            result.put("totalCost", 0.0);
-            result.put("selectedProducts", Collections.emptyList());
-            result.put("selectedScenicAreas", Collections.emptyList());
-            result.put("alreadyCoveredScenicAreaIds", Collections.emptyList());
-            result.put("coveredScenicAreaIds", Collections.emptyList());
-            result.put("combinationDescription", "");
-            return result;
-        }
-
-        Map<Long, LargeScenicArea> scenicMap = new LinkedHashMap<>();
-        for (LargeScenicArea area : largeScenicAreaRepository.findAll()) {
-            if (area != null && area.getId() != null) {
-                scenicMap.put(area.getId(), area);
-            }
-        }
-
-        int scenicCount = orderedIds.size();
-        if (scenicCount > 20) {
-            orderedIds = orderedIds.subList(0, 20);
-            scenicCount = orderedIds.size();
-        }
-        int fullMask = (1 << scenicCount) - 1;
-
-        Map<String, Object> cartCoverage = loadCartCoverageInfo(userId, orderedIds);
-        int initialMask = safeParseInt(String.valueOf(cartCoverage.getOrDefault("coveredMask", 0)), 0);
-
-        List<CartCandidateOption> candidates = new ArrayList<>();
-        candidates.addAll(loadProductCandidates(orderedIds));
-        for (int i = 0; i < orderedIds.size(); i++) {
-            Long scenicAreaId = orderedIds.get(i);
-            LargeScenicArea scenic = scenicMap.get(scenicAreaId);
-            if (scenic == null) {
-                continue;
-            }
-            int coverMask = 1 << i;
-            candidates.add(CartCandidateOption.scenic(
-                    scenicAreaId,
-                    scenic.getName(),
-                    safeDecimal(scenic.getPrice()),
-                    scenic.getImageUrl(),
-                    scenic.getDescription(),
-                    coverMask
-            ));
-        }
-
-        double[] dp = new double[1 << scenicCount];
-        int[] prevMask = new int[1 << scenicCount];
-        int[] prevOptionIndex = new int[1 << scenicCount];
-        Arrays.fill(dp, Double.POSITIVE_INFINITY);
-        Arrays.fill(prevMask, -1);
-        Arrays.fill(prevOptionIndex, -1);
-        dp[initialMask] = 0.0;
-
-        for (int mask = 0; mask <= fullMask; mask++) {
-            if (Double.isInfinite(dp[mask])) {
-                continue;
-            }
-            for (int i = 0; i < candidates.size(); i++) {
-                CartCandidateOption option = candidates.get(i);
-                int nextMask = mask | option.coverMask;
-                if (nextMask == mask) {
-                    continue;
-                }
-                double nextCost = dp[mask] + option.price;
-                if (nextCost + 1e-9 < dp[nextMask]) {
-                    dp[nextMask] = nextCost;
-                    prevMask[nextMask] = mask;
-                    prevOptionIndex[nextMask] = i;
-                }
-            }
-        }
-
-        if (Double.isInfinite(dp[fullMask])) {
-            result.put("success", false);
-            result.put("message", "当前无法计算出完整覆盖所选景区的最省钱购物车方案。");
-            result.put("totalCost", 0.0);
-            result.put("selectedProducts", Collections.emptyList());
-            result.put("selectedScenicAreas", Collections.emptyList());
-            result.put("alreadyCoveredScenicAreaIds", cartCoverage.getOrDefault("alreadyCoveredScenicAreaIds", Collections.emptyList()));
-            result.put("coveredScenicAreaIds", orderedIds);
-            result.put("combinationDescription", "");
-            return result;
-        }
-
-        List<CartCandidateOption> chosenOptions = new ArrayList<>();
-        int mask = fullMask;
-        while (mask != initialMask && mask >= 0 && prevOptionIndex[mask] >= 0) {
-            CartCandidateOption option = candidates.get(prevOptionIndex[mask]);
-            chosenOptions.add(option);
-            mask = prevMask[mask];
-        }
-        Collections.reverse(chosenOptions);
-
-        List<Map<String, Object>> selectedProducts = new ArrayList<>();
-        List<Map<String, Object>> selectedScenicAreas = new ArrayList<>();
-        for (CartCandidateOption option : chosenOptions) {
-            if (option.product) {
-                selectedProducts.add(option.toMap());
-            } else {
-                selectedScenicAreas.add(option.toMap());
-            }
-        }
-
-        result.put("success", true);
-        result.put("totalCost", dp[fullMask]);
-        result.put("selectedProducts", selectedProducts);
-        result.put("selectedScenicAreas", selectedScenicAreas);
-        result.put("alreadyCoveredScenicAreaIds", cartCoverage.getOrDefault("alreadyCoveredScenicAreaIds", Collections.emptyList()));
-        result.put("coveredScenicAreaIds", orderedIds);
-        result.put("combinationDescription", buildCartPlanDescription(selectedProducts, selectedScenicAreas, dp[fullMask]));
-        result.put("allCoveredByCart", initialMask == fullMask);
-        result.put("hasExactPackage", selectedProducts.size() == 1 && selectedScenicAreas.isEmpty()
-                && safeParseInt(String.valueOf(selectedProducts.get(0).getOrDefault("coverMask", 0)), 0) == fullMask);
-        return result;
-    }
-
-    private Map<String, Object> loadCartCoverageInfo(Long userId, List<Long> orderedIds) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("coveredMask", 0);
-        result.put("alreadyCoveredScenicAreaIds", new ArrayList<Long>());
-        if (jdbcTemplate == null || userId == null || orderedIds == null || orderedIds.isEmpty()) {
-            return result;
-        }
-
-        LinkedHashSet<Long> coveredIds = new LinkedHashSet<>();
-        try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                    "SELECT item_type, item_id FROM shopping_cart WHERE user_id = ?",
-                    userId
-            );
-            for (Map<String, Object> row : rows) {
-                String itemType = String.valueOf(row.get("item_type"));
-                Long itemId = toLong(row.get("item_id"));
-                if (itemId == null) {
-                    continue;
-                }
-                if ("SCENIC_AREA".equalsIgnoreCase(itemType)) {
-                    coveredIds.add(itemId);
-                } else if ("PRODUCT".equalsIgnoreCase(itemType)) {
-                    coveredIds.addAll(loadProductScenicAreaIds(itemId));
-                }
-            }
-        } catch (Exception ignored) {
-            return result;
-        }
-
-        int coveredMask = buildCoverageMask(orderedIds, coveredIds);
-        List<Long> alreadyCovered = new ArrayList<>();
-        for (Long id : orderedIds) {
-            if (coveredIds.contains(id)) {
-                alreadyCovered.add(id);
-            }
-        }
-        result.put("coveredMask", coveredMask);
-        result.put("alreadyCoveredScenicAreaIds", alreadyCovered);
-        return result;
-    }
-
-    private List<CartCandidateOption> loadProductCandidates(List<Long> scenicAreaIds) {
-        List<CartCandidateOption> options = new ArrayList<>();
-        if (jdbcTemplate == null || scenicAreaIds == null || scenicAreaIds.isEmpty()) {
-            return options;
-        }
-        try {
-            String placeholders = String.join(",", Collections.nCopies(scenicAreaIds.size(), "?"));
-            String sql = "SELECT p.id, p.name, p.price, p.image_url, p.description, pla.large_scenic_area_id " +
-                    "FROM product p " +
-                    "JOIN product_large_scenic_area pla ON p.id = pla.product_id " +
-                    "WHERE p.status = 'ON_SALE' AND pla.large_scenic_area_id IN (" + placeholders + ") " +
-                    "ORDER BY p.id ASC";
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, scenicAreaIds.toArray());
-
-            Map<Long, LinkedHashSet<Long>> productCoverage = new LinkedHashMap<>();
-            Map<Long, Map<String, Object>> productMeta = new LinkedHashMap<>();
-            for (Map<String, Object> row : rows) {
-                Long productId = toLong(row.get("id"));
-                Long scenicAreaId = toLong(row.get("large_scenic_area_id"));
-                if (productId == null || scenicAreaId == null) {
-                    continue;
-                }
-                productCoverage.computeIfAbsent(productId, key -> new LinkedHashSet<>()).add(scenicAreaId);
-                productMeta.putIfAbsent(productId, row);
-            }
-
-            for (Map.Entry<Long, LinkedHashSet<Long>> entry : productCoverage.entrySet()) {
-                Long productId = entry.getKey();
-                int coverMask = buildCoverageMask(scenicAreaIds, entry.getValue());
-                if (coverMask == 0) {
-                    continue;
-                }
-                Map<String, Object> row = productMeta.get(productId);
-                options.add(CartCandidateOption.product(
-                        productId,
-                        String.valueOf(row.get("name")),
-                        getNumber(row.get("price")),
-                        row.get("image_url") == null ? null : String.valueOf(row.get("image_url")),
-                        row.get("description") == null ? null : String.valueOf(row.get("description")),
-                        coverMask,
-                        new ArrayList<>(entry.getValue())
-                ));
-            }
-        } catch (Exception ignored) {
-            return options;
-        }
-        return options;
-    }
-
-    private List<Long> loadProductScenicAreaIds(Long productId) {
-        List<Long> ids = new ArrayList<>();
-        if (jdbcTemplate == null || productId == null) {
-            return ids;
-        }
-        try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                    "SELECT large_scenic_area_id FROM product_large_scenic_area WHERE product_id = ? ORDER BY large_scenic_area_id ASC",
-                    productId
-            );
-            for (Map<String, Object> row : rows) {
-                Long id = toLong(row.get("large_scenic_area_id"));
-                if (id != null) {
-                    ids.add(id);
-                }
-            }
-        } catch (Exception ignored) {
-            return ids;
-        }
-        return ids;
-    }
-
-    private int buildCoverageMask(List<Long> orderedIds, Collection<Long> coveredIds) {
-        int mask = 0;
-        if (orderedIds == null || coveredIds == null || orderedIds.isEmpty() || coveredIds.isEmpty()) {
-            return mask;
-        }
-        Set<Long> coveredSet = coveredIds instanceof Set ? (Set<Long>) coveredIds : new HashSet<>(coveredIds);
-        for (int i = 0; i < orderedIds.size(); i++) {
-            if (coveredSet.contains(orderedIds.get(i))) {
-                mask |= (1 << i);
-            }
-        }
-        return mask;
-    }
-
-    private String appendCartPrompt(String answer, List<Long> scenicAreaIds, Map<String, Object> cartPlan) {
-        StringBuilder builder = new StringBuilder(answer == null ? "" : answer.trim());
-        if (cartPlan == null || !Boolean.TRUE.equals(cartPlan.get("success")) || scenicAreaIds == null || scenicAreaIds.isEmpty()) {
-            return builder.toString();
-        }
-        builder.append("\n\n按当前套餐与景区价格计算，更省钱的加入方式是：")
-                .append(defaultText(String.valueOf(cartPlan.getOrDefault("combinationDescription", ""))));
-        Object totalCost = cartPlan.get("totalCost");
-        builder.append("，预计新增花费 ")
-                .append(String.format(Locale.ROOT, "%.2f", getNumber(totalCost)))
-                .append(" 元。");
-        builder.append("这套更省钱的组合可以先作为参考；你要是之后想继续加入购物车，直接回复“将你方案放入购物车”或“加入购物车”就行，我再帮你接着处理。");
-        return builder.toString();
-    }
-
-    private String buildCartPlanDescription(List<Map<String, Object>> selectedProducts,
-                                            List<Map<String, Object>> selectedScenicAreas,
-                                            double totalCost) {
-        List<String> parts = new ArrayList<>();
-        for (Map<String, Object> product : selectedProducts) {
-            parts.add("套餐“" + product.get("name") + "”");
-        }
-        for (Map<String, Object> scenic : selectedScenicAreas) {
-            parts.add("景区“" + scenic.get("name") + "”");
-        }
-        if (parts.isEmpty()) {
-            return "当前所需内容原本就在购物车中";
-        }
-        return String.join(" + ", parts);
-    }
-
-    private Map<String, Object> addPendingPlanToCart(Long userId, Map<String, Object> pendingContext) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("success", false);
-        if (userId == null) {
-            result.put("message", "当前未识别到有效用户，暂时无法加入购物车。");
-            return result;
-        }
-        if (pendingContext == null || pendingContext.isEmpty()) {
-            result.put("message", "当前没有可加入购物车的推荐方案。");
-            return result;
-        }
-
-        List<Long> scenicAreaIds = extractLongList(pendingContext.get("scenicAreaIds"));
-        Map<String, Object> cartPlan = buildCheapestCartPlan(scenicAreaIds, userId);
-        if (!Boolean.TRUE.equals(cartPlan.get("success"))) {
-            result.put("message", String.valueOf(cartPlan.getOrDefault("message", "暂时无法计算最省钱的加购方案。")));
-            return result;
-        }
-
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> selectedProducts = cartPlan.get("selectedProducts") instanceof List
-                ? (List<Map<String, Object>>) cartPlan.get("selectedProducts")
-                : Collections.emptyList();
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> selectedScenicAreas = cartPlan.get("selectedScenicAreas") instanceof List
-                ? (List<Map<String, Object>>) cartPlan.get("selectedScenicAreas")
-                : Collections.emptyList();
-
-        List<String> added = new ArrayList<>();
-        List<String> alreadyInCart = new ArrayList<>();
-
-        for (Map<String, Object> product : selectedProducts) {
-            Long productId = toLong(product.get("id"));
-            String productName = String.valueOf(product.getOrDefault("name", "套餐"));
-            if (productId == null) {
-                continue;
-            }
-            if (cartItemExists(userId, "PRODUCT", productId)) {
-                alreadyInCart.add(productName);
-                continue;
-            }
-            insertCartItem(
-                    userId,
-                    "PRODUCT",
-                    productId,
-                    productName,
-                    product.get("price"),
-                    product.get("imageUrl"),
-                    product.get("description")
-            );
-            added.add(productName);
-        }
-
-        for (Map<String, Object> scenic : selectedScenicAreas) {
-            Long scenicAreaId = toLong(scenic.get("id"));
-            String scenicName = String.valueOf(scenic.getOrDefault("name", "景区"));
-            if (scenicAreaId == null) {
-                continue;
-            }
-            if (cartItemExists(userId, "SCENIC_AREA", scenicAreaId)) {
-                alreadyInCart.add(scenicName);
-                continue;
-            }
-            insertCartItem(
-                    userId,
-                    "SCENIC_AREA",
-                    scenicAreaId,
-                    scenicName,
-                    scenic.get("price"),
-                    scenic.get("imageUrl"),
-                    scenic.get("description")
-            );
-            added.add(scenicName);
-        }
-
-        result.put("success", true);
-        result.put("addedItems", added);
-        result.put("alreadyInCartItems", alreadyInCart);
-
-        double totalCost = getNumber(cartPlan.get("totalCost"));
-        String combinationDescription = String.valueOf(cartPlan.getOrDefault("combinationDescription", ""));
-        if (added.isEmpty()) {
-            result.put("message", "按最低花费计算，这次所需的套餐/景区原本就在购物车中，无需重复加入。");
-        } else {
-            result.put("message", "已按最低花费方案加入购物车："
-                    + combinationDescription
-                    + "，预计新增花费 "
-                    + String.format(Locale.ROOT, "%.2f", totalCost)
-                    + " 元。");
-        }
-        return result;
-    }
-
-    private boolean cartItemExists(Long userId, String itemType, Long itemId) {
-        if (jdbcTemplate == null || userId == null || itemId == null) {
-            return false;
-        }
-        try {
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                    "SELECT id FROM shopping_cart WHERE user_id = ? AND item_type = ? AND item_id = ? LIMIT 1",
-                    userId, itemType, itemId
-            );
-            return !rows.isEmpty();
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
-
-    private void insertCartItem(Long userId,
-                                String itemType,
-                                Long itemId,
-                                String itemName,
-                                Object price,
-                                Object imageUrl,
-                                Object features) {
-        if (jdbcTemplate == null || userId == null || itemId == null) {
-            return;
-        }
-        try {
-            jdbcTemplate.update(
-                    "INSERT INTO shopping_cart (user_id, item_type, item_id, item_name, price, image_url, features, quantity) VALUES (?, ?, ?, ?, ?, ?, ?, 1)",
-                    userId,
-                    itemType,
-                    itemId,
-                    itemName,
-                    safeBigDecimal(price),
-                    imageUrl == null ? null : String.valueOf(imageUrl),
-                    features == null ? null : String.valueOf(features)
-            );
-        } catch (Exception ignored) {
-        }
-    }
-
-    private BigDecimal safeBigDecimal(Object value) {
-        if (value == null) {
-            return BigDecimal.ZERO;
-        }
-        if (value instanceof BigDecimal) {
-            return (BigDecimal) value;
-        }
-        if (value instanceof Number) {
-            return BigDecimal.valueOf(((Number) value).doubleValue());
-        }
-        try {
-            return new BigDecimal(String.valueOf(value));
-        } catch (Exception ignored) {
-            return BigDecimal.ZERO;
-        }
-    }
-
-    private List<Long> extractLongList(Object value) {
-        List<Long> result = new ArrayList<>();
-        if (!(value instanceof List)) {
-            return result;
-        }
-        for (Object item : (List<?>) value) {
-            Long parsed = toLong(item);
-            if (parsed != null) {
-                result.add(parsed);
-            }
-        }
-        return result;
     }
 
     private boolean isGeneralScenicListQuery(String query) {
@@ -1789,54 +1340,6 @@ public class RagService {
                 || containsAny(text, "两个景区", "两个景点", "三个景区", "三个景点", "四个景区", "四个景点", "五个景区", "五个景点");
     }
 
-    private String handlePathPlanningQuery(String query) {
-        List<LargeScenicArea> allAreas = largeScenicAreaRepository.findAll();
-        if (allAreas.isEmpty()) {
-            return "当前还没有可用于路线规划的景区数据。";
-        }
-
-        Map<String, String> locations = extractLocations(query, allAreas);
-        LargeScenicArea startArea = findAreaByName(locations.get("start"), allAreas);
-        LargeScenicArea endArea = findAreaByName(locations.get("end"), allAreas);
-        List<LargeScenicArea> mentionedAreas = extractMentionedAreas(query, allAreas);
-
-        if (startArea == null && !mentionedAreas.isEmpty() && normalize(query).contains("从")) {
-            startArea = mentionedAreas.get(0);
-        }
-        if (endArea == null && mentionedAreas.size() >= 2) {
-            endArea = mentionedAreas.get(mentionedAreas.size() - 1);
-        }
-
-        Map<String, Double> preferenceWeights = extractPreferenceWeights(query);
-        String routeMode = extractRouteMode(query, preferenceWeights);
-        int maxStops = extractMaxStops(query);
-        boolean multiStopRoute = isMultiStopRouteQuery(query, maxStops);
-
-        LargeScenicArea singleArea = resolveSingleAreaRouteTarget(startArea, endArea, mentionedAreas);
-        if (singleArea != null && isSingleAreaTourIntent(query, startArea, endArea, mentionedAreas, singleArea)) {
-            return buildSingleAreaTourAnswer(singleArea, query, preferenceWeights);
-        }
-
-        if (startArea != null && endArea != null && !Objects.equals(startArea.getId(), endArea.getId()) && !multiStopRoute) {
-            Map<String, Object> selectedPath = selectRouteResult(startArea.getId(), endArea.getId(), routeMode, preferenceWeights);
-            if (!Boolean.TRUE.equals(selectedPath.get("success"))) {
-                return String.valueOf(selectedPath.getOrDefault("message", "暂时无法规划该路线。"));
-            }
-
-            Map<String, Object> distancePath = pathService.calculateShortestPath(startArea.getId(), endArea.getId(), MODE_DISTANCE);
-            Map<String, Object> timePath = pathService.calculateShortestPath(startArea.getId(), endArea.getId(), MODE_DURATION);
-            return buildSingleRouteAnswer(startArea, endArea, preferenceWeights, routeMode, selectedPath, distancePath, timePath);
-        }
-
-        Long preferredStartId = startArea == null ? null : startArea.getId();
-        Long preferredEndId = endArea == null ? null : endArea.getId();
-        Map<String, Object> cityRoute = pathService.recommendCityRoute(preferredStartId, preferredEndId, preferenceWeights, routeMode, maxStops);
-        if (!Boolean.TRUE.equals(cityRoute.get("success"))) {
-            return String.valueOf(cityRoute.getOrDefault("message", "暂时无法生成城市内景区推荐路线。"));
-        }
-        return buildCityRouteAnswer(startArea, endArea, preferenceWeights, routeMode, cityRoute, maxStops);
-    }
-
     private LargeScenicArea resolveSingleAreaRouteTarget(LargeScenicArea startArea,
                                                          LargeScenicArea endArea,
                                                          List<LargeScenicArea> mentionedAreas) {
@@ -1885,7 +1388,14 @@ public class RagService {
     private String buildSingleAreaTourAnswer(LargeScenicArea area,
                                              String query,
                                              Map<String, Double> preferenceWeights) {
-        List<SmallScenicSpot> allSpots = smallScenicSpotRepository.findAll();
+        return buildSingleAreaTourAnswer(area, query, preferenceWeights, loadSmallSpotsSafely());
+    }
+
+    private String buildSingleAreaTourAnswer(LargeScenicArea area,
+                                             String query,
+                                             Map<String, Double> preferenceWeights,
+                                             List<SmallScenicSpot> allSpots) {
+        allSpots = allSpots == null ? Collections.emptyList() : allSpots;
         List<SmallScenicSpot> areaSpots = new ArrayList<>();
         for (SmallScenicSpot spot : allSpots) {
             if (spot != null && Objects.equals(spot.getLargeAreaId(), area.getId())) {
@@ -2194,11 +1704,29 @@ public class RagService {
                                                   Long endAreaId,
                                                   String routeMode,
                                                   Map<String, Double> preferenceWeights) {
+        return selectRouteResult(startAreaId, endAreaId, routeMode, preferenceWeights, null, null);
+    }
+
+    private Map<String, Object> selectRouteResult(Long startAreaId,
+                                                  Long endAreaId,
+                                                  String routeMode,
+                                                  Map<String, Double> preferenceWeights,
+                                                  List<LargeScenicArea> allAreas,
+                                                  List<SmallScenicSpot> allSpots) {
         if (MODE_DISTANCE.equals(routeMode)) {
+            if (allAreas != null) {
+                return pathService.calculateShortestPath(startAreaId, endAreaId, MODE_DISTANCE, allAreas, allSpots);
+            }
             return pathService.calculateShortestPath(startAreaId, endAreaId, MODE_DISTANCE);
         }
         if (MODE_DURATION.equals(routeMode)) {
+            if (allAreas != null) {
+                return pathService.calculateShortestPath(startAreaId, endAreaId, MODE_DURATION, allAreas, allSpots);
+            }
             return pathService.calculateShortestPath(startAreaId, endAreaId, MODE_DURATION);
+        }
+        if (allAreas != null) {
+            return pathService.calculatePersonalizedPath(startAreaId, endAreaId, preferenceWeights, allAreas, allSpots);
         }
         return pathService.calculatePersonalizedPath(startAreaId, endAreaId, preferenceWeights);
     }
@@ -2915,9 +2443,7 @@ public class RagService {
                                           LargeScenicArea endArea,
                                           Map<String, Double> preferenceWeights,
                                           String routeMode,
-                                          Map<String, Object> selectedPath,
-                                          Map<String, Object> distancePath,
-                                          Map<String, Object> timePath) {
+                                          Map<String, Object> selectedPath) {
         StringBuilder answer = new StringBuilder();
         answer.append("已为你规划好路线。\n\n");
         answer.append("起点：").append(startArea.getName()).append("\n");
@@ -3283,38 +2809,6 @@ public class RagService {
         cleaned = cleaned.replaceAll("\\n[ \\t]*\\n[ \\t]*\\n+", "\\n\\n");
         return cleaned.trim();
     }
-
-
-
-    private String sanitizeAndValidateGeneratedAnswer(String text,
-                                                      String query,
-                                                      List<LargeScenicArea> largeAreas,
-                                                      List<SmallScenicSpot> smallSpots,
-                                                      String context,
-                                                      Set<String> allowedNames) {
-        String cleaned = sanitizeAiAnswer(text);
-        cleaned = enforcePureChineseAndWhitelist(cleaned, allowedNames);
-
-        ValidationSummary validation = validateGeneratedAnswer(cleaned, allowedNames);
-        if (validation.hasIssues()) {
-            String rewritten = rewriteAnswerWithWhitelist(query, context, cleaned, allowedNames, validation, EMPTY_CHAT_HISTORY);
-            cleaned = sanitizeAiAnswer(rewritten);
-            cleaned = enforcePureChineseAndWhitelist(cleaned, allowedNames);
-            validation = validateGeneratedAnswer(cleaned, allowedNames);
-        }
-
-        if (validation.hasIssues()) {
-            cleaned = stripUnknownScenicCandidates(cleaned, allowedNames);
-            cleaned = enforcePureChineseAndWhitelist(cleaned, allowedNames);
-            validation = validateGeneratedAnswer(cleaned, allowedNames);
-        }
-
-        if (cleaned.isBlank() || validation.hasIssues()) {
-            return buildKnowledgeOnlyFallbackAnswer(query, largeAreas, smallSpots, TourismIntentClassification.unknown());
-        }
-        return cleaned;
-    }
-
     private String polishFactAnswer(String query, String factAnswer, Set<String> allowedNames, String chatHistory) {
         String fallback = sanitizeAiAnswer(factAnswer);
         if (chatModel == null || fallback.isBlank()) {
@@ -3653,40 +3147,6 @@ public class RagService {
         return "景区内景观";
     }
 
-    private String rewriteAnswerWithWhitelist(String query,
-                                              String context,
-                                              String previousAnswer,
-                                              Set<String> allowedNames,
-                                              ValidationSummary validation,
-                                              String chatHistory) {
-        if (chatModel == null) {
-            return previousAnswer;
-        }
-        String rewritePrompt = renderPrompt(WHITELIST_REWRITE_PROMPT,
-                promptVariables(
-                        "context", context,
-                        "allowedNames", buildAllowedNameSummary(allowedNames),
-                        "chatHistory", defaultChatHistory(chatHistory),
-                        "query", query,
-                        "previousAnswer", previousAnswer,
-                        "validationSummary", buildValidationSummaryText(validation)));
-        return chatModel.generate(rewritePrompt);
-    }
-
-    private String buildValidationSummaryText(ValidationSummary validation) {
-        if (validation == null || !validation.hasIssues()) {
-            return "未发现问题";
-        }
-        StringBuilder message = new StringBuilder();
-        if (!validation.illegalEnglishTokens.isEmpty()) {
-            message.append("存在英文或拼音片段：").append(String.join("、", validation.illegalEnglishTokens)).append("。 ");
-        }
-        if (!validation.unknownScenicCandidates.isEmpty()) {
-            message.append("存在不在白名单中的景点或设施名称：").append(String.join("、", validation.unknownScenicCandidates)).append("。 ");
-        }
-        return message.toString().trim();
-    }
-
     private String buildKnowledgeOnlyFallbackAnswer(String query,
                                                     List<LargeScenicArea> largeAreas,
                                                     List<SmallScenicSpot> smallSpots,
@@ -3968,67 +3428,6 @@ public class RagService {
         }
     }
 
-
-    private static class CartCandidateOption {
-        private final boolean product;
-        private final Long id;
-        private final String name;
-        private final double price;
-        private final String imageUrl;
-        private final String description;
-        private final int coverMask;
-        private final List<Long> coveredScenicAreaIds;
-
-        private CartCandidateOption(boolean product,
-                                    Long id,
-                                    String name,
-                                    double price,
-                                    String imageUrl,
-                                    String description,
-                                    int coverMask,
-                                    List<Long> coveredScenicAreaIds) {
-            this.product = product;
-            this.id = id;
-            this.name = name;
-            this.price = price;
-            this.imageUrl = imageUrl;
-            this.description = description;
-            this.coverMask = coverMask;
-            this.coveredScenicAreaIds = coveredScenicAreaIds == null ? Collections.emptyList() : coveredScenicAreaIds;
-        }
-
-        private static CartCandidateOption product(Long id,
-                                                   String name,
-                                                   double price,
-                                                   String imageUrl,
-                                                   String description,
-                                                   int coverMask,
-                                                   List<Long> coveredScenicAreaIds) {
-            return new CartCandidateOption(true, id, name, price, imageUrl, description, coverMask, coveredScenicAreaIds);
-        }
-
-        private static CartCandidateOption scenic(Long id,
-                                                  String name,
-                                                  double price,
-                                                  String imageUrl,
-                                                  String description,
-                                                  int coverMask) {
-            return new CartCandidateOption(false, id, name, price, imageUrl, description, coverMask, Collections.singletonList(id));
-        }
-
-        private Map<String, Object> toMap() {
-            Map<String, Object> map = new LinkedHashMap<>();
-            map.put("id", id);
-            map.put("name", name);
-            map.put("price", price);
-            map.put("imageUrl", imageUrl);
-            map.put("description", description);
-            map.put("coverMask", coverMask);
-            map.put("coveredScenicAreaIds", new ArrayList<>(coveredScenicAreaIds));
-            map.put("type", product ? "PRODUCT" : "SCENIC_AREA");
-            return map;
-        }
-    }
 
     private static class ValidationSummary {
         private final LinkedHashSet<String> illegalEnglishTokens = new LinkedHashSet<>();

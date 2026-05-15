@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -341,12 +342,12 @@ class RagServiceTest {
                 area(5L, "大相国寺", 0)
         ));
         when(smallRepository.findAll()).thenReturn(List.of());
-        when(pathService.recommendCityRoute(eq(null), eq(null), anyMap(), anyString(), eq(3)))
+        when(pathService.recommendCityRoute(eq(null), eq(null), anyMap(), anyString(), eq(3), anyList(), anyList()))
                 .thenReturn(cityRouteResult());
 
         String answer = service.generateAnswer("方案\n游");
 
-        verify(pathService).recommendCityRoute(eq(null), eq(null), anyMap(), anyString(), eq(3));
+        verify(pathService).recommendCityRoute(eq(null), eq(null), anyMap(), anyString(), eq(3), anyList(), anyList());
         assertThat(answer).contains("已为你整理出一条游玩路线")
                 .doesNotContain("请告诉我你想了解的开封景点");
     }
@@ -417,12 +418,12 @@ class RagServiceTest {
         when(largeRepository.findAll()).thenReturn(areas);
         when(smallRepository.findAll()).thenReturn(List.of());
         when(model.generate(anyString())).thenReturn("intent=ROUTE_PLAN\nscenicName=\nmaxStops=5\nreason=更多方案");
-        when(pathService.recommendCityRoute(eq(null), eq(null), anyMap(), anyString(), eq(5)))
+        when(pathService.recommendCityRoute(eq(null), eq(null), anyMap(), anyString(), eq(5), anyList(), anyList()))
                 .thenReturn(cityRouteResult());
 
         String answer = service.generateAnswer("提供更多景区的方案\n游");
 
-        verify(pathService).recommendCityRoute(eq(null), eq(null), anyMap(), anyString(), eq(5));
+        verify(pathService).recommendCityRoute(eq(null), eq(null), anyMap(), anyString(), eq(5), anyList(), anyList());
         verify(model).generate(anyString());
         assertThat(answer)
                 .contains("本次共安排5个景区")
@@ -476,13 +477,13 @@ class RagServiceTest {
         );
         when(largeRepository.findAll()).thenReturn(areas);
         when(smallRepository.findAll()).thenReturn(List.of());
-        when(pathService.recommendCityRoute(eq(1L), eq(2L), anyMap(), anyString(), eq(5)))
+        when(pathService.recommendCityRoute(eq(1L), eq(2L), anyMap(), anyString(), eq(5), anyList(), anyList()))
                 .thenReturn(cityRouteResult());
 
         Map<String, Object> context = service.buildRouteCartContext("从清明上河园开始，火车站结束，途径5个景区的方案");
         String answer = String.valueOf(context.get("answer"));
 
-        verify(pathService).recommendCityRoute(eq(1L), eq(2L), anyMap(), anyString(), eq(5));
+        verify(pathService).recommendCityRoute(eq(1L), eq(2L), anyMap(), anyString(), eq(5), anyList(), anyList());
         verify(pathService, never()).calculateShortestPath(eq(1L), eq(2L), anyString());
         assertThat(answer).contains("本次共安排5个景区")
                 .contains("清明上河园")
@@ -513,7 +514,7 @@ class RagServiceTest {
         );
         when(largeRepository.findAll()).thenReturn(areas);
         when(smallRepository.findAll()).thenReturn(List.of());
-        when(pathService.recommendCityRoute(eq(1L), eq(2L), anyMap(), anyString(), eq(5)))
+        when(pathService.recommendCityRoute(eq(1L), eq(2L), anyMap(), anyString(), eq(5), anyList(), anyList()))
                 .thenReturn(Map.of(
                         "success", true,
                         "pathDetails", List.of(
@@ -536,7 +537,7 @@ class RagServiceTest {
         Map<String, Object> context = service.buildRouteCartContext("从火车站开始，到清明上河园结束途径5处景区的方案");
         String answer = String.valueOf(context.get("answer"));
 
-        verify(pathService).recommendCityRoute(eq(1L), eq(2L), anyMap(), anyString(), eq(5));
+        verify(pathService).recommendCityRoute(eq(1L), eq(2L), anyMap(), anyString(), eq(5), anyList(), anyList());
         assertThat(answer)
                 .contains("起点偏好：开封站")
                 .contains("终点偏好：清明上河园")
@@ -556,26 +557,6 @@ class RagServiceTest {
         );
 
         assertThat(unrecorded).isFalse();
-    }
-
-    @Test
-    void keepsUnknownScenicFallbackPhraseDuringValidation() {
-        RagService service = new RagService();
-        LargeScenicArea knownArea = area("清明上河园");
-        LinkedHashSet<String> allowedNames = new LinkedHashSet<>(List.of("清明上河园"));
-
-        String answer = ReflectionTestUtils.invokeMethod(
-                service,
-                "sanitizeAndValidateGeneratedAnswer",
-                "开封市并没有这个景点。",
-                "白马楼如何游玩",
-                List.of(knownArea),
-                List.<SmallScenicSpot>of(),
-                "",
-                allowedNames
-        );
-
-        assertThat(answer).isEqualTo("开封市并没有这个景点。");
     }
 
     @Test
