@@ -1,5 +1,6 @@
 package org.example.toutismplatform.service;
 
+import dev.langchain4j.model.input.PromptTemplate;
 import org.example.toutismplatform.entity.LargeScenicArea;
 import org.example.toutismplatform.repository.LargeScenicAreaRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +22,11 @@ import java.util.Set;
 
 @Service
 public class CartPlanService {
+
+    private static final PromptTemplate CART_APPEND_PROMPT = PromptTemplate.from("""
+            {{answer}}
+
+            按当前套餐与景区价格计算，更省钱的加入方式是：{{combinationDescription}}，预计新增花费 {{totalCost}} 元。这套更省钱的组合可以先作为参考；你要是之后想继续加入购物车，直接回复“将你方案放入购物车”或“加入购物车”就行，我再帮你接着处理。""");
 
     @Autowired
     private LargeScenicAreaRepository largeScenicAreaRepository;
@@ -169,17 +175,15 @@ public class CartPlanService {
     }
 
     public String appendCartPrompt(String answer, List<Long> scenicAreaIds, Map<String, Object> cartPlan) {
-        StringBuilder builder = new StringBuilder(answer == null ? "" : answer.trim());
+        String normalizedAnswer = answer == null ? "" : answer.trim();
         if (cartPlan == null || !Boolean.TRUE.equals(cartPlan.get("success")) || scenicAreaIds == null || scenicAreaIds.isEmpty()) {
-            return builder.toString();
+            return normalizedAnswer;
         }
-        builder.append("\n\n按当前套餐与景区价格计算，更省钱的加入方式是：")
-                .append(defaultText(String.valueOf(cartPlan.getOrDefault("combinationDescription", ""))));
-        builder.append("，预计新增花费 ")
-                .append(String.format(Locale.ROOT, "%.2f", getNumber(cartPlan.get("totalCost"))))
-                .append(" 元。");
-        builder.append("这套更省钱的组合可以先作为参考；你要是之后想继续加入购物车，直接回复“将你方案放入购物车”或“加入购物车”就行，我再帮你接着处理。");
-        return builder.toString();
+        return CART_APPEND_PROMPT.apply(Map.of(
+                "answer", normalizedAnswer,
+                "combinationDescription", defaultText(String.valueOf(cartPlan.getOrDefault("combinationDescription", ""))),
+                "totalCost", String.format(Locale.ROOT, "%.2f", getNumber(cartPlan.get("totalCost")))
+        )).text();
     }
 
     public Map<String, Object> addPendingPlanToCart(Long userId, Map<String, Object> pendingContext) {

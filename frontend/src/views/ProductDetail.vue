@@ -56,7 +56,7 @@ export default {
         name: '特色手工艺品',
         price: 199,
         description: '这是一个精美的特色手工艺品，具有浓郁的地方特色，是送礼和收藏的绝佳选择。',
-        image: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=traditional%20handicraft%20souvenir&image_size=square',
+        image: 'http://localhost:8080/images/package-heritage-leisure.jpg',
         stock: 50
       }
     },
